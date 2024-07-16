@@ -32,9 +32,26 @@ class MAAgentEnv(Env):
 
 class BaseSharedEnv():
 
+    agents = {}
+    previous_observation = {}
+
     def get_agents_envs(self):
-        # Create the agents
-        raise NotImplementedError
+        # Return the agents
+        return self.agents
+
+    def set_agent_models(self, models):
+        """
+        Sets the models for all agents.
+
+        Parameters:
+        - models (dict): A dictionary where keys are the agent identifiers and values are the models to be set.
+        """
+        for agent_id, agent in self.agents.items():
+            if agent_id in models:
+                agent.set_model(models[agent_id])
+            else:
+                raise ValueError(f"Model for agent_id '{agent_id}' is not provided in the models dictionary.")
+
 
     def step_all(self, agent_actions):
         def step_agent(agent_id, action):
@@ -47,17 +64,33 @@ class BaseSharedEnv():
             for future in futures:
                 future.result()  # Wait for all futures to complete
         
-        self.wait_actions_completion()
+        self.wait_for_actions_completion()
 
         obs, rewards, terminated, truncated, info = self.get_full_state()
 
         return obs, rewards, terminated, truncated, info
                 
-    def wait_actions_completion(self):
-        pass
+    def wait_for_actions_completion(self):
+        # Must be implemented, even if it is just a pass
+        raise NotImplementedError
+
+    def predict_other_agents_actions(self, agent_id):
+        if agent_id not in self.agents:
+            raise ValueError("Invalid agent_id")
+        other_agents_predictions = {}
+        for other_agent_id in self.agents:
+            if other_agent_id != agent_id:
+                # Predict the action of the other agent using its environment's predict method
+                other_agents_predictions[other_agent_id] = self.agents[other_agent_id].predict(self.previous_observation[other_agent_id])[0][0]
+        return other_agents_predictions
 
     def get_full_state(self):
-        # Get the observations for all agents
+         obs, rewards, terminated, truncated, infos = self.get_env_full_state()
+         self.previous_observation = obs # Required for the multi-agent step process, we need to reuse the previous observation
+         return obs, rewards, terminated, truncated, infos
+
+    def get_env_full_state(self):
+        # This is the one to be implemented by the subclass
         raise NotImplementedError
 
     def reset(self, seed=0):

@@ -51,39 +51,22 @@ class PredatorPreyEnv(BaseSharedEnv):
         self.agent_predator_env = MAAgentEnv(self, "predator", self.predator_observation_space, self.predator_action_space)
         self.agent_prey_env = MAAgentEnv(self, "prey", self.prey_observation_space, self.prey_action_space)
 
-
-    def step_simulation(self):
-        """
-        Hook p.stepSimulation()
-        """
-        p.stepSimulation()
-        if self.render_mode:
-            time.sleep(self.SIMULATION_STEP_DELAY)
-
-    def wait_actions_completion(self, sim_steps=10):
-        for _ in range(sim_steps):
-            self.step_simulation()
-    
-    def get_agents_envs(self):
-        agents = {
+        # Add the agents to the dictionary for further management
+        self.agents = {
             "predator": self.agent_predator_env,
             "prey": self.agent_prey_env
         }
 
-        return agents
-    
-    def set_agent_models(self, models):
-        self.agent_predator_env.set_model(models['predator'])
-        self.agent_prey_env.set_model(models['prey'])
 
-    def predict_other_agents_actions(self, agent_id):
-        if agent_id == "predator":
-            return {'prey': self.agent_prey_env.predict(self.previous_observation['prey'])[0][0]}
-        elif agent_id == "prey":
-            return {'predator': self.agent_predator_env.predict(self.previous_observation['predator'])[0][0]}
-        else:
-            raise ValueError("Invalid agent_id")
-    
+    def step_simulation(self):
+        p.stepSimulation()
+        if self.render_mode:
+            time.sleep(self.SIMULATION_STEP_DELAY)
+
+    def wait_for_actions_completion(self, sim_steps=10):
+        for _ in range(sim_steps):
+            self.step_simulation()
+        
     def reset(self, seed=0):
         limit_spawn_perimeter = 2
         random_coor = lambda: random.uniform(-limit_spawn_perimeter, limit_spawn_perimeter)
@@ -91,7 +74,7 @@ class PredatorPreyEnv(BaseSharedEnv):
         p.resetBasePositionAndOrientation(self.prey_id, [random_coor(), random_coor(), 0.5], [0, 0, 0, 1])
         p.resetBaseVelocity(self.predator_id, [0, 0, 0], [0, 0, 0])
         p.resetBaseVelocity(self.prey_id, [0, 0, 0], [0, 0, 0])
-        self.wait_actions_completion(100)
+        self.wait_for_actions_completion(100)
 
         obs, _, _, _, info = self.get_full_state()
         return obs, info
@@ -106,7 +89,7 @@ class PredatorPreyEnv(BaseSharedEnv):
         force_y = action[1]
         self.move(self.prey_id, force_x, force_y)
 
-    def get_full_state(self):
+    def get_env_full_state(self):
         obs = {
             "predator": self.get_observations_predator(),
             "prey": self.get_observations_prey()
@@ -114,7 +97,7 @@ class PredatorPreyEnv(BaseSharedEnv):
 
         truncated = False
         rewards = {'predator': 0, 'prey': 0}
-        info = {}   
+        infos = {}   
 
         predator_pos = self.get_position_predator()
         prey_pos = self.get_position_prey()
@@ -145,9 +128,7 @@ class PredatorPreyEnv(BaseSharedEnv):
                 rewards['prey'] += 0.1
                 terminated = False
 
-        self.previous_observation = obs
-
-        return obs, rewards, terminated, truncated, info
+        return obs, rewards, terminated, truncated, infos
 
     def get_observations_predator(self):
         predator_pos = self.get_position_predator()
