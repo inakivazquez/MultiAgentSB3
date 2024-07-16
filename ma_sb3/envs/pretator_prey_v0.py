@@ -29,7 +29,6 @@ class PredatorPreyEnv(BaseSharedEnv):
         # Reorient the debug camera
         p.resetDebugVisualizerCamera(cameraDistance=4, cameraYaw=0, cameraPitch=-50, cameraTargetPosition=[0,-1,0])
 
-
         # Load the plane and objects
         self.plane_id = p.loadURDF("plane.urdf", [0,0,0])
         self.predator_id = p.loadURDF("cube.urdf", [0, 0, 0], useFixedBase=False, globalScaling=0.3,)
@@ -41,22 +40,14 @@ class PredatorPreyEnv(BaseSharedEnv):
         self.draw_perimeter(6)
 
         # Create the agents
-        self.predator_observation_space = Box(low=np.array([-5, -5]), high=np.array([5, 5]), shape=(2,), dtype=np.float32)
-        self.prey_observation_space = Box(low=np.array([-5, -5]), high=np.array([5, 5]), shape=(2,), dtype=np.float32)
-
-        self.predator_action_space = Box(low=np.array([-10, -10]), high=np.array([10, 10]), shape=(2,), dtype=np.float32)
-        self.prey_action_space = Box(low=np.array([-12, -12]), high=np.array([12, 12]), shape=(2,), dtype=np.float32)
-
-        # Create the agent environments
-        self.agent_predator_env = MAAgentEnv(self, "predator", self.predator_observation_space, self.predator_action_space)
-        self.agent_prey_env = MAAgentEnv(self, "prey", self.prey_observation_space, self.prey_action_space)
-
-        # Add the agents to the dictionary for further management
-        self.agents = {
-            "predator": self.agent_predator_env,
-            "prey": self.agent_prey_env
-        }
-
+        self.register_agent('predator',
+                        Box(low=np.array([-5, -5]), high=np.array([5, 5]), shape=(2,), dtype=np.float32),
+                        Box(low=np.array([-10, -10]), high=np.array([10, 10]), shape=(2,), dtype=np.float32)
+                        )
+        self.register_agent('prey',
+                        Box(low=np.array([-5, -5]), high=np.array([5, 5]), shape=(2,), dtype=np.float32),
+                        Box(low=np.array([-12, -12]), high=np.array([12, 12]), shape=(2,), dtype=np.float32)
+                        )
 
     def step_simulation(self):
         p.stepSimulation()

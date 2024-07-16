@@ -1,6 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
 from gymnasium import Env
-
 class MAAgentEnv(Env):
         def __init__(self, shared_env, agent_id, observation_space, action_space) -> None:
             super().__init__()
@@ -34,6 +33,12 @@ class BaseSharedEnv():
 
     agents = {}
     previous_observation = {}
+
+    def register_agent(self, agent_id, observation_space, action_space):
+        # Create the agent environment
+        agent_env = MAAgentEnv(self, agent_id, observation_space, action_space)
+        # Add the agent environment to the dictionary
+        self.agents[agent_id] = agent_env
 
     def get_agents_envs(self):
         # Return the agents

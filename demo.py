@@ -17,17 +17,16 @@ if __name__ == "__main__":
 
         agents_envs = shared_environment.get_agents_envs()
         
-        env1 = TimeLimit(agents_envs['predator'], max_episode_steps=100)
-        env2 = TimeLimit(agents_envs['prey'], max_episode_steps=100)
+        env_predator = TimeLimit(agents_envs['predator'], max_episode_steps=100)
+        env_prey = TimeLimit(agents_envs['prey'], max_episode_steps=100)
 
         # Start new training
-        #model_predator = PPO("MlpPolicy", env1, verbose=1, tensorboard_log="./logs")
-        #model_prey = PPO("MlpPolicy", env2, verbose=1, tensorboard_log="./logs")
+        #model_predator = PPO("MlpPolicy", env_predator, verbose=1, tensorboard_log="./logs")
+        #model_prey = PPO("MlpPolicy", env_prey, verbose=1, tensorboard_log="./logs")
 
         # Continue training
-        model_predator = PPO.load("model_predator", env1, tensorboard_log="./logs")
-        model_prey = PPO.load("model_prey", env2, tensorboard_log="./logs")
-
+        model_predator = PPO.load("policies/model_predator", env_predator, tensorboard_log="./logs")
+        model_prey = PPO.load("policies/model_prey", env_prey, tensorboard_log="./logs")
 
         shared_environment.set_agent_models(models = {'predator':model_predator, 'prey': model_prey})
 
@@ -42,12 +41,12 @@ if __name__ == "__main__":
 
         shared_environment.close()
 
-        model_predator.save("model_predator")
-        model_prey.save("model_prey")
+        model_predator.save("policies/model_predator")
+        model_prey.save("policies/model_prey")
     
 
-    model_predator = PPO.load("model_predator")
-    model_prey = PPO.load("model_prey")
+    model_predator = PPO.load("policies/model_predator")
+    model_prey = PPO.load("policies/model_prey")
     
     shared_environment = PredatorPreyEnv(render=True)
     agents_envs = shared_environment.get_agents_envs()
