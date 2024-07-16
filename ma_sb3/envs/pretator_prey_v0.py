@@ -1,67 +1,15 @@
-from gymnasium import Env
+from concurrent.futures import ThreadPoolExecutor
+from ma_sb3 import MAAgentEnv, BaseSharedEnv
+
 from gymnasium.spaces import Box
-from gymnasium import spaces
-from gymnasium.wrappers.time_limit import TimeLimit
 import numpy as np
 
 import pybullet as p
 import pybullet_data
 import time
 
-from stable_baselines3 import PPO
-from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.vec_env import DummyVecEnv
 import pybullet as p
 import random
-
-
-class MAAgentEnv(Env):
-        def __init__(self, shared_env, agent_id, observation_space, action_space) -> None:
-            super().__init__()
-            self.shared_env = shared_env
-            self.agent_id = agent_id
-    
-            self.observation_space = observation_space
-            self.action_space = action_space
-    
-        def step(self, actions):
-            all_actions = self.shared_env.predict_other_agents_actions(self.agent_id)
-            all_actions[self.agent_id] = actions 
-            all_observations, rewards, terminated, truncated, info = self.shared_env.step_all(all_actions)
-            observations = all_observations[self.agent_id]
-            reward = rewards[self.agent_id]
-
-            return observations, reward, terminated, truncated, info
-    
-        def reset(self, seed=0):
-            obs, info = self.shared_env.reset(seed)
-            return obs[self.agent_id], info
-
-        def set_model(self, model):
-            self.model = model
-
-        def predict(self, obs):
-            return self.model.predict(obs)
-
-
-class BaseSharedEnv():
-
-    def get_agents_envs(self):
-        # Create the agents
-        raise NotImplementedError
-
-    def step_all(self, agent_actions):
-        # Do the actions of all agents
-        raise NotImplementedError
-        
-    def get_full_state(self):
-        # Get the observations for all agents
-        raise NotImplementedError
-
-    def reset(self, seed=0):
-        # Reset the environment
-        raise NotImplementedError
-
 
 class PredatorPreyEnv(BaseSharedEnv):
 
@@ -86,15 +34,17 @@ class PredatorPreyEnv(BaseSharedEnv):
         self.plane_id = p.loadURDF("plane.urdf", [0,0,0])
         self.predator_id = p.loadURDF("cube.urdf", [0, 0, 0], useFixedBase=False, globalScaling=0.3,)
         p.changeVisualShape(self.predator_id, -1, rgbaColor=[0.8, 0.1, 0.1, 1])
-        self.prey_id = p.loadURDF("cube.urdf", [1, 1, 0], useFixedBase=False, globalScaling=0.3)
+        self.prey_id = p.loadURDF("cube.urdf", [1, 1, 0], useFixedBase=False, globalScaling=0.2)
+        #p.changeDynamics(self.predator_id, -1, lateralFriction=1)
+        #p.changeDynamics(self.prey_id, -1, lateralFriction=1)
 
         self.draw_perimeter(6)
 
+        # Create the agents
         self.predator_observation_space = Box(low=np.array([-5, -5]), high=np.array([5, 5]), shape=(2,), dtype=np.float32)
         self.prey_observation_space = Box(low=np.array([-5, -5]), high=np.array([5, 5]), shape=(2,), dtype=np.float32)
 
         self.predator_action_space = Box(low=np.array([-10, -10]), high=np.array([10, 10]), shape=(2,), dtype=np.float32)
-        # Make the prey a little faster
         self.prey_action_space = Box(low=np.array([-12, -12]), high=np.array([12, 12]), shape=(2,), dtype=np.float32)
 
         # Create the agent environments
@@ -110,7 +60,7 @@ class PredatorPreyEnv(BaseSharedEnv):
         if self.render_mode:
             time.sleep(self.SIMULATION_STEP_DELAY)
 
-    def wait_simulation_steps(self, sim_steps=10):
+    def wait_actions_completion(self, sim_steps=10):
         for _ in range(sim_steps):
             self.step_simulation()
     
@@ -141,22 +91,11 @@ class PredatorPreyEnv(BaseSharedEnv):
         p.resetBasePositionAndOrientation(self.prey_id, [random_coor(), random_coor(), 0.5], [0, 0, 0, 1])
         p.resetBaseVelocity(self.predator_id, [0, 0, 0], [0, 0, 0])
         p.resetBaseVelocity(self.prey_id, [0, 0, 0], [0, 0, 0])
-        self.wait_simulation_steps(100)
+        self.wait_actions_completion(100)
 
         obs, _, _, _, info = self.get_full_state()
         return obs, info
 
-    def step_all(self, agent_actions):
-        self.step_agent_predator(agent_actions['predator'])
-        self.step_agent_prey(agent_actions['prey'])
-        
-        self.wait_simulation_steps()
-
-        obs, rewards, terminated, truncated, info = self.get_full_state()
-
-        return obs, rewards, terminated, truncated, info
-        
-        
     def step_agent_predator(self, action):
         force_x = action[0]
         force_y = action[1]
@@ -261,71 +200,12 @@ class PredatorPreyEnv(BaseSharedEnv):
         )
 
         # Create the multi-body object
-        p.createMultiBody(
+        perimeter_id = p.createMultiBody(
             baseMass=0,  # Static object
             baseCollisionShapeIndex=collision_shape_id,
             baseVisualShapeIndex=visual_shape_id,
             basePosition=[0, 0, half_height]
         )
 
-            
-# Example of running the environment
-if __name__ == "__main__":
+        p.changeDynamics(perimeter_id, -1, lateralFriction=1)
 
-    train = True
-    train = False
-
-    if train:
-        shared_environment = PredatorPreyEnv(render=False)
-
-        agents_envs = shared_environment.get_agents_envs()
-        
-        env1 = TimeLimit(agents_envs['predator'], max_episode_steps=100)
-        env2 = TimeLimit(agents_envs['prey'], max_episode_steps=100)
-
-        # Start new training
-        model_predator = PPO("MlpPolicy", env1, verbose=1, tensorboard_log="./logs")
-        model_prey = PPO("MlpPolicy", env2, verbose=1, tensorboard_log="./logs")
-
-        # Continue training
-        #model_predator = PPO.load("model_predator", env1, tensorboard_log="./logs")
-        #model_prey = PPO.load("model_prey", env2, tensorboard_log="./logs")
-
-
-        shared_environment.set_agent_models(models = {'predator':model_predator, 'prey': model_prey})
-
-        total_timesteps = 200_000
-        iterations = 100
-        steps_per_iteration = total_timesteps // iterations
-
-        for i in range(iterations):
-            print(f"Training iteration {i}")
-            model_predator.learn(total_timesteps=steps_per_iteration, progress_bar=True, reset_num_timesteps=False, tb_log_name="predator")
-            model_prey.learn(total_timesteps=steps_per_iteration, progress_bar=True, reset_num_timesteps=False, tb_log_name="prey")
-
-        shared_environment.close()
-
-        model_predator.save("model_predator")
-        model_prey.save("model_prey")
-    
-
-    model_predator = PPO.load("model_predator")
-    model_prey = PPO.load("model_prey")
-    
-    shared_environment = PredatorPreyEnv(render=True)
-    agents_envs = shared_environment.get_agents_envs()
-
-    for _ in range(50):
-        obs, info = shared_environment.reset()
-        terminated = False
-
-        while not terminated:
-            actions = {
-                "predator": model_predator.predict(obs['predator'])[0][0],
-                "prey": model_prey.predict(obs['prey'])[0][0]
-            }
-
-            #print("Actions:", actions)
-            obs, rewards, terminated, _ , _= shared_environment.step_all(actions)
-
-    shared_environment.close()
