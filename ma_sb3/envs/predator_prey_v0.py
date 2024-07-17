@@ -44,7 +44,6 @@ class PredatorPreyMAEnv(BaseMAEnv):
                         observation_space=Box(low=np.array([-5, -5]), high=np.array([5, 5]), shape=(2,), dtype=np.float32),
                         action_space=Box(low=np.array([-10, -10]), high=np.array([10, 10]), shape=(2,), dtype=np.float32)
                         )
-        # Prey can move faster
         self.register_agent(agent_id='prey',
                         observation_space=Box(low=np.array([-5, -5]), high=np.array([5, 5]), shape=(2,), dtype=np.float32),
                         action_space=Box(low=np.array([-10, -10]), high=np.array([10, 10]), shape=(2,), dtype=np.float32)
@@ -79,7 +78,7 @@ class PredatorPreyMAEnv(BaseMAEnv):
     def step_agent_prey(self, action):
         force_x = action[0]
         force_y = action[1]
-        self.move(self.prey_id, force_x, force_y)
+        self.move(self.prey_id, force_x, force_y) # Prey can move faster if required
 
     def get_env_full_state(self):
         obs = {
@@ -141,6 +140,12 @@ class PredatorPreyMAEnv(BaseMAEnv):
         return np.array([prey_pos[:2]])
 
     def move(self, agent_id, force_x, force_y):
+        # Limit the force to prevent the agent from moving too fast
+        if abs(p.getBaseVelocity(agent_id)[0][0]) > 5:
+            force_x = 0
+        if abs(p.getBaseVelocity(agent_id)[0][1]) > 5:
+            force_y = 0
+
         factor = 100
         force_x *= factor
         force_y *= factor
@@ -180,7 +185,7 @@ class PredatorPreyMAEnv(BaseMAEnv):
             basePosition=[0, 0, half_height]
         )
 
-        #p.changeDynamics(perimeter_id, -1, lateralFriction=1)
+        p.changeDynamics(perimeter_id, -1, lateralFriction=0.5)
 
         self.create_walled_square(side_length, 0.1, 0.2, height , [0.2, 0.2, 0.2, 1])
 

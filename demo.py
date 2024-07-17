@@ -11,7 +11,7 @@ import pybullet as p
 if __name__ == "__main__":
 
     train = True
-    #train = False
+    train = False
     load_previous_predator = False
     load_previous_prey = False
 
@@ -31,19 +31,19 @@ if __name__ == "__main__":
         env_prey = agents_envs['prey']
 
         if load_previous_predator:
-            model_predator = predator_algo.load("policies/model_predator", env_predator, tensorboard_log="./logs")
+            model_predator = predator_algo.load(f"policies/model_predator_{predator_algo.__name__}", env_predator, tensorboard_log="./logs")
         else:
             model_predator = predator_algo("MlpPolicy", env_predator, verbose=1, tensorboard_log="./logs")
 
         if load_previous_prey:
-            model_prey = prey_algo.load("policies/model_prey", env_prey, tensorboard_log="./logs")
+            model_prey = prey_algo.load(f"policies/model_prey_{prey_algo.__name__}", env_prey, tensorboard_log="./logs")
         else:
             model_prey = prey_algo("MlpPolicy", env_prey, verbose=1, tensorboard_log="./logs")
 
         ma_env.set_agent_models(models = {'predator':model_predator, 'prey': model_prey})
 
-        total_timesteps_per_agent = 10_000
-        training_iterations = 5
+        total_timesteps_per_agent = 20_000
+        training_iterations = 10
         steps_per_iteration = total_timesteps_per_agent // training_iterations
 
         for i in range(training_iterations):
