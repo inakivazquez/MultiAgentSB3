@@ -1,8 +1,9 @@
-from ma_sb3.envs import PredatorPreyEnv
+from ma_sb3.envs import PredatorPreyMAEnv
+from ma_sb3 import TimeLimitMAEnv
 
 from gymnasium.wrappers.time_limit import TimeLimit
 
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, SAC
 import pybullet as p
 
 
@@ -10,58 +11,71 @@ import pybullet as p
 if __name__ == "__main__":
 
     train = True
-    train = False
+    #train = False
+    load_previous_predator = False
+    load_previous_prey = False
+
+    predator_algo = PPO
+    prey_algo = PPO
 
     if train:
-        shared_environment = PredatorPreyEnv(render=False)
+        ma_env = PredatorPreyMAEnv(render=False)
+        ma_env = TimeLimitMAEnv(ma_env, max_episode_steps=100)
 
-        agents_envs = shared_environment.get_agents_envs()
+        agents_envs = ma_env.get_agents_envs()
         
-        env_predator = TimeLimit(agents_envs['predator'], max_episode_steps=100)
-        env_prey = TimeLimit(agents_envs['prey'], max_episode_steps=100)
+        #env_predator = TimeLimit(agents_envs['predator'], max_episode_steps=100)
+        #env_prey = TimeLimit(agents_envs['prey'], max_episode_steps=100)
 
-        # Start new training
-        #model_predator = PPO("MlpPolicy", env_predator, verbose=1, tensorboard_log="./logs")
-        #model_prey = PPO("MlpPolicy", env_prey, verbose=1, tensorboard_log="./logs")
+        env_predator = agents_envs['predator']
+        env_prey = agents_envs['prey']
 
-        # Continue training
-        model_predator = PPO.load("policies/model_predator", env_predator, tensorboard_log="./logs")
-        model_prey = PPO.load("policies/model_prey", env_prey, tensorboard_log="./logs")
+        if load_previous_predator:
+            model_predator = predator_algo.load("policies/model_predator", env_predator, tensorboard_log="./logs")
+        else:
+            model_predator = predator_algo("MlpPolicy", env_predator, verbose=1, tensorboard_log="./logs")
 
-        shared_environment.set_agent_models(models = {'predator':model_predator, 'prey': model_prey})
+        if load_previous_prey:
+            model_prey = prey_algo.load("policies/model_prey", env_prey, tensorboard_log="./logs")
+        else:
+            model_prey = prey_algo("MlpPolicy", env_prey, verbose=1, tensorboard_log="./logs")
 
-        total_timesteps = 200_000
-        iterations = 50
-        steps_per_iteration = total_timesteps // iterations
+        ma_env.set_agent_models(models = {'predator':model_predator, 'prey': model_prey})
 
-        for i in range(iterations):
+        total_timesteps_per_agent = 20_000
+        training_iterations = 10
+        steps_per_iteration = total_timesteps_per_agent // training_iterations
+
+        for i in range(training_iterations):
             print(f"Training iteration {i}")
-            #model_predator.learn(total_timesteps=steps_per_iteration, progress_bar=True, reset_num_timesteps=False, tb_log_name="predator")
+            model_predator.learn(total_timesteps=steps_per_iteration, progress_bar=True, reset_num_timesteps=False, tb_log_name="predator")
             model_prey.learn(total_timesteps=steps_per_iteration, progress_bar=True, reset_num_timesteps=False, tb_log_name="prey")
 
-        shared_environment.close()
+        ma_env.close()
 
         model_predator.save("policies/model_predator")
         model_prey.save("policies/model_prey")
-    
+        
 
-    model_predator = PPO.load("policies/model_predator")
-    model_prey = PPO.load("policies/model_prey")
-    
-    shared_environment = PredatorPreyEnv(render=True)
-    agents_envs = shared_environment.get_agents_envs()
+    # TESTING SECTION
+    ma_env = PredatorPreyMAEnv(render=True)
+    ma_env = TimeLimitMAEnv(ma_env, max_episode_steps=100)
+
+    model_predator = predator_algo.load("policies/model_predator")
+    model_prey = prey_algo.load("policies/model_prey")
 
     for _ in range(50):
-        obs, info = shared_environment.reset()
+        obs, info = ma_env.reset()
         terminated = False
+        truncated = False
 
-        while not terminated:
+        while not terminated and not truncated:
             actions = {
                 "predator": model_predator.predict(obs['predator'])[0][0],
                 "prey": model_prey.predict(obs['prey'])[0][0]
             }
 
             #print("Actions:", actions)
-            obs, rewards, terminated, _ , _= shared_environment.step_all(actions)
+            obs, rewards, terminated, truncated , _= ma_env.step_all(actions)
 
-    shared_environment.close()
+    ma_env.close()

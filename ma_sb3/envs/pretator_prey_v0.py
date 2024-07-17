@@ -1,5 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
-from ma_sb3 import MAAgentEnv, BaseSharedEnv
+from ma_sb3 import AgentMAEnv, BaseMAEnv
 
 from gymnasium.spaces import Box
 import numpy as np
@@ -11,12 +11,12 @@ import time
 import pybullet as p
 import random
 
-class PredatorPreyEnv(BaseSharedEnv):
+class PredatorPreyMAEnv(BaseMAEnv):
 
     SIMULATION_STEP_DELAY = 1. / 240.
 
     def __init__(self, render=False):
-        super(PredatorPreyEnv, self).__init__()
+        super(PredatorPreyMAEnv, self).__init__()
         self.render_mode = render
         self.physicsClient = p.connect(p.GUI if render else p.DIRECT)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
@@ -31,7 +31,7 @@ class PredatorPreyEnv(BaseSharedEnv):
 
         # Load the plane and objects
         self.plane_id = p.loadURDF("plane.urdf", [0,0,0])
-        self.predator_id = p.loadURDF("cube.urdf", [0, 0, 0], useFixedBase=False, globalScaling=0.3,)
+        self.predator_id = p.loadURDF("cube.urdf", [0, 0, 0], useFixedBase=False, globalScaling=0.3)
         p.changeVisualShape(self.predator_id, -1, rgbaColor=[0.8, 0.1, 0.1, 1])
         self.prey_id = p.loadURDF("cube.urdf", [1, 1, 0], useFixedBase=False, globalScaling=0.2)
         #p.changeDynamics(self.predator_id, -1, lateralFriction=1)
@@ -40,13 +40,14 @@ class PredatorPreyEnv(BaseSharedEnv):
         self.draw_perimeter(6)
 
         # Create the agents
-        self.register_agent('predator',
-                        Box(low=np.array([-5, -5]), high=np.array([5, 5]), shape=(2,), dtype=np.float32),
-                        Box(low=np.array([-10, -10]), high=np.array([10, 10]), shape=(2,), dtype=np.float32)
+        self.register_agent(agent_id='predator',
+                        observation_space=Box(low=np.array([-5, -5]), high=np.array([5, 5]), shape=(2,), dtype=np.float32),
+                        action_space=Box(low=np.array([-5, -5]), high=np.array([5, 5]), shape=(2,), dtype=np.float32)
                         )
-        self.register_agent('prey',
-                        Box(low=np.array([-5, -5]), high=np.array([5, 5]), shape=(2,), dtype=np.float32),
-                        Box(low=np.array([-12, -12]), high=np.array([12, 12]), shape=(2,), dtype=np.float32)
+        # Prey can move faster
+        self.register_agent(agent_id='prey',
+                        observation_space=Box(low=np.array([-5, -5]), high=np.array([5, 5]), shape=(2,), dtype=np.float32),
+                        action_space=Box(low=np.array([-10, -10]), high=np.array([10, 10]), shape=(2,), dtype=np.float32)
                         )
 
     def step_simulation(self):
@@ -179,5 +180,52 @@ class PredatorPreyEnv(BaseSharedEnv):
             basePosition=[0, 0, half_height]
         )
 
-        p.changeDynamics(perimeter_id, -1, lateralFriction=1)
+        #p.changeDynamics(perimeter_id, -1, lateralFriction=1)
 
+        self.create_walled_square(side_length, 0.1, 0.2, height , [0.2, 0.2, 0.2, 1])
+
+    def create_walled_square(self, length, thickness, height, base_height, color):
+        """
+        Creates a walled square with configurable side length, thickness, height, and color.
+
+        Args:
+            length (float): The length of each side of the square.
+            thickness (float): The thickness of the walls.
+            height (float): The height of the walls.
+            color (tuple): A tuple representing the color of the walls in RGB format (r, g, b).
+        """
+        # Define the dimensions of the wall
+        half_length = length / 2
+        half_thickness = thickness / 2
+        half_height = height / 2
+
+        # Create collision shape for a wall segment
+        wall_shape = p.createCollisionShape(shapeType=p.GEOM_BOX,
+                                            halfExtents=[half_length, half_thickness, half_height])
+
+        # Define the visual shape for the wall
+        wall_visual = p.createVisualShape(shapeType=p.GEOM_BOX,
+                                        halfExtents=[half_length, half_thickness, half_height],
+                                        rgbaColor=[color[0], color[1], color[2], 1])
+
+        # Position and orientation for the four walls
+        positions = [
+            [0, half_length - half_thickness, base_height + half_height],   # Front wall
+            [0, -half_length + half_thickness, base_height + half_height],  # Back wall
+            [half_length - half_thickness, 0, base_height + half_height],   # Right wall
+            [-half_length + half_thickness, 0, base_height + half_height]   # Left wall
+        ]
+        orientations = [
+            p.getQuaternionFromEuler([0, 0, 0]),                    # Front wall
+            p.getQuaternionFromEuler([0, 0, 0]),                    # Back wall
+            p.getQuaternionFromEuler([0, 0, 1.5708]),  # Right wall (90 degrees rotation around Z-axis)
+            p.getQuaternionFromEuler([0, 0, 1.5708])   # Left wall (90 degrees rotation around Z-axis)
+        ]
+
+        # Create walls
+        for i in range(4):
+            p.createMultiBody(baseMass=0,
+                            baseCollisionShapeIndex=wall_shape,
+                            baseVisualShapeIndex=wall_visual,
+                            basePosition=positions[i],
+                            baseOrientation=orientations[i])
