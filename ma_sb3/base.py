@@ -26,7 +26,8 @@ class AgentMAEnv(Env):
             self.model = model
 
         def predict(self, obs):
-            return self.model.predict(obs)
+            action = self.model.predict(obs)
+            return action
 
 
 class BaseMAEnv():
@@ -59,26 +60,18 @@ class BaseMAEnv():
 
 
     def step_all(self, agent_actions):
-        def step_agent(agent_id, action):
-            step_function = getattr(self, f'step_agent_{agent_id}')
-            step_function(action)
-
         # Execute steps concurrently
         with ThreadPoolExecutor() as executor:
-            futures = [executor.submit(step_agent, agent_id, action) for agent_id, action in agent_actions.items()]
+            futures = [executor.submit(self.step_agent, agent_id, action) for agent_id, action in agent_actions.items()]
             for future in futures:
                 future.result()  # Wait for all futures to complete
         
-        self.wait_for_actions_completion()
+        self.sync_wait_for_actions_completion()
 
-        obs, rewards, terminated, truncated, info = self.get_full_state()
+        obs, rewards, terminated, truncated, info = self.get_state()
 
         return obs, rewards, terminated, truncated, info
                 
-    def wait_for_actions_completion(self):
-        # Must be implemented, even if it is just a pass
-        raise NotImplementedError
-
     def predict_other_agents_actions(self, agent_id):
         if agent_id not in self.agents:
             raise ValueError("Invalid agent_id")
@@ -86,26 +79,45 @@ class BaseMAEnv():
         for other_agent_id in self.agents:
             if other_agent_id != agent_id:
                 # Predict the action of the other agent using its environment's predict method
-                other_agents_predictions[other_agent_id] = self.agents[other_agent_id].predict(self.previous_observation[other_agent_id])[0][0]
+                other_agents_predictions[other_agent_id] = self.agents[other_agent_id].predict(self.previous_observation[other_agent_id])[0]
         return other_agents_predictions
 
-    def get_full_state(self):
-         obs, rewards, terminated, truncated, infos = self.get_env_full_state()
+    def get_state(self):
+         obs = {}
+         for agent_id in self.agents.keys():
+             obs[agent_id] = self.get_observation(agent_id)
+         rewards, terminated, truncated, infos = self.get_env_state_results()
          self.previous_observation = obs # Required for the multi-agent step process, we need to reuse the previous observation
          return obs, rewards, terminated, truncated, infos
 
-    def get_env_full_state(self):
-        # This is the one to be implemented by the subclass
+    def close(self):
+        # Closes the environment
+        pass
+
+    # Functions to be implemented by the subclass
+
+    def step_agent(self, agent_id, action):
+        # Must be implemented in the subclass
+        # Executes the action for the agent_id
+        raise NotImplementedError
+    
+    def get_observation(self, agent_id):
+        # Must be implemented in the subclass
+        # Returns the observation for the agent_id
+        raise NotImplementedError
+
+    def sync_wait_for_actions_completion(self):
+        # Must be implemented, even if it is just a 'pass' if no synchronization is needed
+        raise NotImplementedError
+
+    def get_env_state_results(self):
+        # For the current state of the environment, it must return rewards, terminated, truncated, infos
         raise NotImplementedError
 
     def reset(self, seed=0):
-        # Reset the environment
+        # Must return obs, info
         raise NotImplementedError
-    
-    def close(self):
-        # Close the environment
-        pass
-    
+        
 
 class TimeLimitMAEnv(BaseMAEnv):
 
@@ -137,16 +149,16 @@ class TimeLimitMAEnv(BaseMAEnv):
     def set_agent_models(self, models):
         return self.env.set_agent_models(models)
                 
-    def wait_for_actions_completion(self):
+    def sync_wait_for_actions_completion(self):
         return self.env.wait_for_actions_completion()
 
     def predict_other_agents_actions(self, agent_id):
         return self.env.predict_other_agents_actions(agent_id)
 
-    def get_full_state(self):
+    def get_state(self):
         return self.env.get_full_state()
 
-    def get_env_full_state(self):
+    def get_env_state_results(self):
         return self.env.get_env_full_state()
 
     def close(self):

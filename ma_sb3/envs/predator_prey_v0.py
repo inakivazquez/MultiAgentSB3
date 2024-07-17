@@ -14,6 +14,8 @@ import random
 class PredatorPreyMAEnv(BaseMAEnv):
 
     SIMULATION_STEP_DELAY = 1. / 240.
+    MAX_PREDATOR_SPEED = 3
+    MAX_PREY_SPEED = 5
 
     def __init__(self, render=False):
         super(PredatorPreyMAEnv, self).__init__()
@@ -30,10 +32,10 @@ class PredatorPreyMAEnv(BaseMAEnv):
         p.resetDebugVisualizerCamera(cameraDistance=4, cameraYaw=0, cameraPitch=-50, cameraTargetPosition=[0,-1,0])
 
         # Load the plane and objects
-        self.plane_id = p.loadURDF("plane.urdf", [0,0,0])
-        self.predator_id = p.loadURDF("cube.urdf", [0, 0, 0], useFixedBase=False, globalScaling=0.3)
-        p.changeVisualShape(self.predator_id, -1, rgbaColor=[0.8, 0.1, 0.1, 1])
-        self.prey_id = p.loadURDF("cube.urdf", [1, 1, 0], useFixedBase=False, globalScaling=0.2)
+        self.pybullet_plane_id = p.loadURDF("plane.urdf", [0,0,0])
+        self.pybullet_predator_id = p.loadURDF("cube.urdf", [0, 0, 0], useFixedBase=False, globalScaling=0.3)
+        p.changeVisualShape(self.pybullet_predator_id, -1, rgbaColor=[0.8, 0.1, 0.1, 1])
+        self.pybullet_prey_id = p.loadURDF("cube.urdf", [1, 1, 0], useFixedBase=False, globalScaling=0.2)
         #p.changeDynamics(self.predator_id, -1, lateralFriction=1)
         #p.changeDynamics(self.prey_id, -1, lateralFriction=1)
 
@@ -54,38 +56,58 @@ class PredatorPreyMAEnv(BaseMAEnv):
         if self.render_mode:
             time.sleep(self.SIMULATION_STEP_DELAY)
 
-    def wait_for_actions_completion(self, sim_steps=10):
+    def sync_wait_for_actions_completion(self, sim_steps=10):
         for _ in range(sim_steps):
             self.step_simulation()
         
     def reset(self, seed=0):
         limit_spawn_perimeter = 2
         random_coor = lambda: random.uniform(-limit_spawn_perimeter, limit_spawn_perimeter)
-        p.resetBasePositionAndOrientation(self.predator_id, [random_coor(), random_coor(), 0.5], [0, 0, 0, 1])
-        p.resetBasePositionAndOrientation(self.prey_id, [random_coor(), random_coor(), 0.5], [0, 0, 0, 1])
-        p.resetBaseVelocity(self.predator_id, [0, 0, 0], [0, 0, 0])
-        p.resetBaseVelocity(self.prey_id, [0, 0, 0], [0, 0, 0])
-        self.wait_for_actions_completion(100)
+        p.resetBasePositionAndOrientation(self.pybullet_predator_id, [random_coor(), random_coor(), 0.5], [0, 0, 0, 1])
+        p.resetBasePositionAndOrientation(self.pybullet_prey_id, [random_coor(), random_coor(), 0.5], [0, 0, 0, 1])
+        p.resetBaseVelocity(self.pybullet_predator_id, [0, 0, 0], [0, 0, 0])
+        p.resetBaseVelocity(self.pybullet_prey_id, [0, 0, 0], [0, 0, 0])
+        self.sync_wait_for_actions_completion(100)
 
-        obs, _, _, _, info = self.get_full_state()
+        obs, _, _, _, info = self.get_state()
         return obs, info
 
-    def step_agent_predator(self, action):
+    def step_agent(self, agent_id, action):
         force_x = action[0]
         force_y = action[1]
-        self.move(self.predator_id, force_x, force_y)
 
-    def step_agent_prey(self, action):
-        force_x = action[0]
-        force_y = action[1]
-        self.move(self.prey_id, force_x, force_y) # Prey can move faster if required
+        if agent_id == 'predator':
+            pybullet_object_id = self.pybullet_predator_id
+            max = self.MAX_PREDATOR_SPEED
+        else:
+            pybullet_object_id = self.pybullet_prey_id
+            max = self.MAX_PREY_SPEED
 
-    def get_env_full_state(self):
-        obs = {
-            "predator": self.get_observations_predator(),
-            "prey": self.get_observations_prey()
-        }
+        # Limit the speed
+        velocity, _ = p.getBaseVelocity(pybullet_object_id)
+        if abs(velocity[0]) > max:
+            force_x = 0
+        if abs(velocity[1]) > max:
+            force_y = 0
 
+        self.move(pybullet_object_id, force_x, force_y)
+        
+    def get_observation(self, agent_id):
+        if agent_id == 'predator':
+            pybullet_this_id = self.pybullet_predator_id
+            pybullet_other_id = self.pybullet_prey_id
+        else:
+            pybullet_this_id = self.pybullet_prey_id
+            pybullet_other_id = self.pybullet_predator_id
+
+        this_position,_ = p.getBasePositionAndOrientation(pybullet_this_id)
+        this_position = np.array(this_position[:2])
+
+        other_position,_ = p.getBasePositionAndOrientation(pybullet_other_id)
+        other_position = np.array(other_position[:2])
+        return other_position - this_position
+
+    def get_env_state_results(self):
         truncated = False
         rewards = {'predator': 0, 'prey': 0}
         infos = {}   
@@ -93,7 +115,7 @@ class PredatorPreyMAEnv(BaseMAEnv):
         predator_pos = self.get_position_predator()
         prey_pos = self.get_position_prey()
         #distance = np.linalg.norm(predator_pos - prey_pos)  # Calculate distance between the two, not used in this example
-        if(p.getContactPoints(self.predator_id, self.prey_id)):
+        if(p.getContactPoints(self.pybullet_predator_id, self.pybullet_prey_id)):
             # Predator wins
             terminated = True
             rewards['predator'] = 10
@@ -119,33 +141,17 @@ class PredatorPreyMAEnv(BaseMAEnv):
                 rewards['prey'] += 0.1
                 terminated = False
 
-        return obs, rewards, terminated, truncated, infos
-
-    def get_observations_predator(self):
-        predator_pos = self.get_position_predator()
-        prey_pos = self.get_position_prey()
-        return prey_pos-predator_pos
-
-    def get_observations_prey(self):
-        predator_pos = self.get_position_predator()
-        prey_pos = self.get_position_prey()
-        return predator_pos-prey_pos
+        return  rewards, terminated, truncated, infos
     
     def get_position_predator(self):
-        predator_pos,_ = p.getBasePositionAndOrientation(self.predator_id)
+        predator_pos,_ = p.getBasePositionAndOrientation(self.pybullet_predator_id)
         return np.array([predator_pos[:2]])
 
     def get_position_prey(self):
-        prey_pos,_ = p.getBasePositionAndOrientation(self.prey_id)
+        prey_pos,_ = p.getBasePositionAndOrientation(self.pybullet_prey_id)
         return np.array([prey_pos[:2]])
 
     def move(self, agent_id, force_x, force_y):
-        # Limit the force to prevent the agent from moving too fast
-        if abs(p.getBaseVelocity(agent_id)[0][0]) > 5:
-            force_x = 0
-        if abs(p.getBaseVelocity(agent_id)[0][1]) > 5:
-            force_y = 0
-
         factor = 100
         force_x *= factor
         force_y *= factor

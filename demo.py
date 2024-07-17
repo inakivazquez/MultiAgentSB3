@@ -11,12 +11,12 @@ import pybullet as p
 if __name__ == "__main__":
 
     train = True
-    train = False
+    #train = False
     load_previous_predator = False
     load_previous_prey = False
 
-    predator_algo = SAC
-    prey_algo = SAC
+    predator_algo = PPO
+    prey_algo = PPO
 
     if train:
         ma_env = PredatorPreyMAEnv(render=False)
@@ -42,8 +42,8 @@ if __name__ == "__main__":
 
         ma_env.set_agent_models(models = {'predator':model_predator, 'prey': model_prey})
 
-        total_timesteps_per_agent = 20_000
-        training_iterations = 10
+        total_timesteps_per_agent = 200_000
+        training_iterations = 20
         steps_per_iteration = total_timesteps_per_agent // training_iterations
 
         for i in range(training_iterations):
