@@ -15,8 +15,8 @@ if __name__ == "__main__":
     load_previous_predator = False
     load_previous_prey = False
 
-    predator_algo = PPO
-    prey_algo = PPO
+    predator_algo = SAC
+    prey_algo = SAC
 
     if train:
         ma_env = PredatorPreyMAEnv(render=False)
@@ -42,27 +42,27 @@ if __name__ == "__main__":
 
         ma_env.set_agent_models(models = {'predator':model_predator, 'prey': model_prey})
 
-        total_timesteps_per_agent = 20_000
-        training_iterations = 10
+        total_timesteps_per_agent = 10_000
+        training_iterations = 5
         steps_per_iteration = total_timesteps_per_agent // training_iterations
 
         for i in range(training_iterations):
             print(f"Training iteration {i}")
-            model_predator.learn(total_timesteps=steps_per_iteration, progress_bar=True, reset_num_timesteps=False, tb_log_name="predator")
-            model_prey.learn(total_timesteps=steps_per_iteration, progress_bar=True, reset_num_timesteps=False, tb_log_name="prey")
+            model_predator.learn(total_timesteps=steps_per_iteration, progress_bar=True, reset_num_timesteps=False, tb_log_name=f"predator_{predator_algo.__name__}")
+            model_prey.learn(total_timesteps=steps_per_iteration, progress_bar=True, reset_num_timesteps=False, tb_log_name=f"prey_{prey_algo.__name__}")
 
         ma_env.close()
 
-        model_predator.save("policies/model_predator")
-        model_prey.save("policies/model_prey")
+        model_predator.save(f"policies/model_predator_{predator_algo.__name__}")
+        model_prey.save(f"policies/model_prey_{prey_algo.__name__}")
         
 
     # TESTING SECTION
     ma_env = PredatorPreyMAEnv(render=True)
     ma_env = TimeLimitMAEnv(ma_env, max_episode_steps=100)
 
-    model_predator = predator_algo.load("policies/model_predator")
-    model_prey = prey_algo.load("policies/model_prey")
+    model_predator = predator_algo.load(f"policies/model_predator_{predator_algo.__name__}")
+    model_prey = prey_algo.load(f"policies/model_prey_{prey_algo.__name__}")
 
     for _ in range(50):
         obs, info = ma_env.reset()

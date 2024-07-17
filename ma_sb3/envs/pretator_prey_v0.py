@@ -42,7 +42,7 @@ class PredatorPreyMAEnv(BaseMAEnv):
         # Create the agents
         self.register_agent(agent_id='predator',
                         observation_space=Box(low=np.array([-5, -5]), high=np.array([5, 5]), shape=(2,), dtype=np.float32),
-                        action_space=Box(low=np.array([-5, -5]), high=np.array([5, 5]), shape=(2,), dtype=np.float32)
+                        action_space=Box(low=np.array([-10, -10]), high=np.array([10, 10]), shape=(2,), dtype=np.float32)
                         )
         # Prey can move faster
         self.register_agent(agent_id='prey',
