@@ -12,21 +12,18 @@ if __name__ == "__main__":
 
     train = True
     #train = False
-    load_previous_predator = False
-    load_previous_prey = False
+    load_previous_predator = True
+    load_previous_prey = True
 
     predator_algo = PPO
     prey_algo = PPO
 
     if train:
-        ma_env = PredatorPreyMAEnv(render=False)
+        ma_env = PredatorPreyMAEnv(perimeter_side=6, render=False)
         ma_env = TimeLimitMAEnv(ma_env, max_episode_steps=100)
 
         agents_envs = ma_env.get_agents_envs()
         
-        #env_predator = TimeLimit(agents_envs['predator'], max_episode_steps=100)
-        #env_prey = TimeLimit(agents_envs['prey'], max_episode_steps=100)
-
         env_predator = agents_envs['predator']
         env_prey = agents_envs['prey']
 
@@ -42,8 +39,8 @@ if __name__ == "__main__":
 
         ma_env.set_agent_models(models = {'predator':model_predator, 'prey': model_prey})
 
-        total_timesteps_per_agent = 200_000
-        training_iterations = 20
+        total_timesteps_per_agent = 50_000
+        training_iterations = 10
         steps_per_iteration = total_timesteps_per_agent // training_iterations
 
         for i in range(training_iterations):
@@ -58,7 +55,7 @@ if __name__ == "__main__":
         
 
     # TESTING SECTION
-    ma_env = PredatorPreyMAEnv(render=True)
+    ma_env = PredatorPreyMAEnv(perimeter_side=10, render=True)
     ma_env = TimeLimitMAEnv(ma_env, max_episode_steps=100)
 
     model_predator = predator_algo.load(f"policies/model_predator_{predator_algo.__name__}")
@@ -71,8 +68,8 @@ if __name__ == "__main__":
 
         while not terminated and not truncated:
             actions = {
-                "predator": model_predator.predict(obs['predator'])[0][0],
-                "prey": model_prey.predict(obs['prey'])[0][0]
+                "predator": model_predator.predict(obs['predator'])[0],
+                "prey": model_prey.predict(obs['prey'])[0]
             }
 
             #print("Actions:", actions)

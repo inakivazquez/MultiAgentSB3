@@ -35,15 +35,19 @@ class BaseMAEnv():
     agents = {}
     previous_observation = {}
 
-    def register_agent(self, agent_id, observation_space, action_space):
+    def register_agent(self, agent_id, observation_space, action_space, model_name=None):
         # Create the agent environment
         agent_env = AgentMAEnv(self, agent_id, observation_space, action_space)
-        # Add the agent environment to the dictionary
-        self.agents[agent_id] = agent_env
+        # Add the agent environment and model name to the dictionary
+        if model_name is None:
+            model_name = agent_id
+        self.agents[agent_id] = (agent_env, model_name)
+
 
     def get_agents_envs(self):
-        # Return the agents
-        return self.agents
+        # Return a dictionary of the different agents' envs
+        envs = {key: value[0] for key, value in self.agents.items()}
+        return envs
 
     def set_agent_models(self, models):
         """
@@ -52,9 +56,10 @@ class BaseMAEnv():
         Parameters:
         - models (dict): A dictionary where keys are the agent identifiers and values are the models to be set.
         """
-        for agent_id, agent in self.agents.items():
-            if agent_id in models:
-                agent.set_model(models[agent_id])
+        for agent_id, agent_data in self.agents.items():
+            model_name = agent_data[1]
+            if model_name in models:
+                agent_data[0].set_model(models[model_name])
             else:
                 raise ValueError(f"Model for agent_id '{agent_id}' is not provided in the models dictionary.")
 
@@ -79,7 +84,8 @@ class BaseMAEnv():
         for other_agent_id in self.agents:
             if other_agent_id != agent_id:
                 # Predict the action of the other agent using its environment's predict method
-                other_agents_predictions[other_agent_id] = self.agents[other_agent_id].predict(self.previous_observation[other_agent_id])[0]
+                other_agent = self.agents[other_agent_id][0]
+                other_agents_predictions[other_agent_id] = other_agent.predict(self.previous_observation[other_agent_id])[0]
         return other_agents_predictions
 
     def get_state(self):
@@ -127,8 +133,8 @@ class TimeLimitMAEnv(BaseMAEnv):
     def __init__(self, env, max_episode_steps=None) -> None:
         self.env = env
         self.max_episode_steps = max_episode_steps
-        for agent_id, agent_env in self.agents.items():
-            agent_env.shared_env = self
+        for agent_id, agent_data in self.agents.items():
+            agent_data[0].shared_env = self
 
     def step_all(self, agent_actions):
         obs, rewards, terminated, truncated, info = self.env.step_all(agent_actions)

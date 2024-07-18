@@ -11,12 +11,12 @@ import time
 import pybullet as p
 import random
 
-class PredatorPreyMAEnv(BaseMAEnv):
+class MultiPredatorPreyMAEnv(BaseMAEnv):
 
     SIMULATION_STEP_DELAY = 1. / 240.
 
-    def __init__(self, max_speed_predator=3, max_speed_prey=5, perimeter_side = 6, render=False):
-        super(PredatorPreyMAEnv, self).__init__()
+    def __init__(self, n_predators=2, max_speed_predator=3, max_speed_prey = 5, perimeter_side = 10, render=False):
+        super(MultiPredatorPreyMAEnv, self).__init__()
         self.render_mode = render
         self.physicsClient = p.connect(p.GUI if render else p.DIRECT)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
@@ -32,24 +32,34 @@ class PredatorPreyMAEnv(BaseMAEnv):
 
         # Load the plane and objects
         self.pybullet_plane_id = p.loadURDF("plane.urdf", [0,0,0])
-        self.pybullet_predator_id = p.loadURDF("cube.urdf", [0, 0, 0], useFixedBase=False, globalScaling=0.3)
-        p.changeVisualShape(self.pybullet_predator_id, -1, rgbaColor=[0.8, 0.1, 0.1, 1])
+
+        self.pybullet_predators_ids = []
+        for _ in range(n_predators):
+            predator_id = p.loadURDF("cube.urdf", [0, 0, 0], useFixedBase=False, globalScaling=0.3)
+            self.pybullet_predators_ids.append(predator_id)
+            p.changeVisualShape(predator_id, -1, rgbaColor=[0.8, 0.1, 0.1, 1])
+
         self.pybullet_prey_id = p.loadURDF("cube.urdf", [1, 1, 0], useFixedBase=False, globalScaling=0.2)
         #p.changeDynamics(self.pybullet_predator_id, -1, lateralFriction=1)
         #p.changeDynamics(self.pybullet_prey_id, -1, lateralFriction=1)
-
         self.perimeter_side = perimeter_side
         self.draw_perimeter(self.perimeter_side)
+        vision_length = self.perimeter_side / 2
 
         # Create the agents
-        vision_length = self.perimeter_side / 2
-        self.register_agent(agent_id='predator',
-                        observation_space=Box(low=np.array([-self.perimeter_side, -self.perimeter_side, -vision_length, -vision_length]), high=np.array([self.perimeter_side, self.perimeter_side, vision_length, vision_length]), shape=(4,), dtype=np.float32),
-                        action_space=Box(low=np.array([-10, -10]), high=np.array([10, 10]), shape=(2,), dtype=np.float32)
-                        )
+        obs_space_len = 2 * (n_predators - 1) + 2 # x,y per other predator + x,y of prey
+        for i in range(n_predators):
+            self.register_agent(agent_id=f'predator_{i}',
+                            observation_space=Box(low=np.array([-vision_length]*obs_space_len), high=np.array([vision_length]*obs_space_len), shape=(obs_space_len,), dtype=np.float32),
+                            action_space=Box(low=np.array([-10, -10]), high=np.array([10, 10]), shape=(2,), dtype=np.float32),
+                            model_name='predator'
+                            )
+
+        obs_space_len = 2 * n_predators # x,y per each predator
         self.register_agent(agent_id='prey',
-                        observation_space=Box(low=np.array([-self.perimeter_side, -self.perimeter_side, -vision_length, -vision_length]), high=np.array([self.perimeter_side, self.perimeter_side, vision_length, vision_length]), shape=(4,), dtype=np.float32),
-                        action_space=Box(low=np.array([-10, -10]), high=np.array([10, 10]), shape=(2,), dtype=np.float32)
+                        observation_space=Box(low=np.array([-vision_length]*obs_space_len), high=np.array([vision_length]*obs_space_len), shape=(obs_space_len,), dtype=np.float32),
+                        action_space=Box(low=np.array([-10, -10]), high=np.array([10, 10]), shape=(2,), dtype=np.float32),
+                        model_name='prey'
                         )
         
         self.max_speed_predator = max_speed_predator
@@ -65,11 +75,12 @@ class PredatorPreyMAEnv(BaseMAEnv):
             self.step_simulation()
         
     def reset(self, seed=0):
-        limit_spawn_perimeter = self.perimeter_side / 2 -1
+        limit_spawn_perimeter = 2
         random_coor = lambda: random.uniform(-limit_spawn_perimeter, limit_spawn_perimeter)
-        p.resetBasePositionAndOrientation(self.pybullet_predator_id, [random_coor(), random_coor(), 0.5], [0, 0, 0, 1])
+        for predator_id in self.pybullet_predators_ids:
+            p.resetBasePositionAndOrientation(predator_id, [random_coor(), random_coor(), 0.5], [0, 0, 0, 1])
+            p.resetBaseVelocity(predator_id, [0, 0, 0], [0, 0, 0])
         p.resetBasePositionAndOrientation(self.pybullet_prey_id, [random_coor(), random_coor(), 0.5], [0, 0, 0, 1])
-        p.resetBaseVelocity(self.pybullet_predator_id, [0, 0, 0], [0, 0, 0])
         p.resetBaseVelocity(self.pybullet_prey_id, [0, 0, 0], [0, 0, 0])
         self.sync_wait_for_actions_completion(100)
 
@@ -80,8 +91,8 @@ class PredatorPreyMAEnv(BaseMAEnv):
         force_x = action[0]
         force_y = action[1]
 
-        if agent_id == 'predator':
-            pybullet_object_id = self.pybullet_predator_id
+        if agent_id.startswith('predator'):
+            pybullet_object_id = self.get_pybullet_id(agent_id)
             max = self.max_speed_predator
         else:
             pybullet_object_id = self.pybullet_prey_id
@@ -95,7 +106,7 @@ class PredatorPreyMAEnv(BaseMAEnv):
             force_y = 0
 
         self.move(pybullet_object_id, force_x, force_y)
-        
+
     def get_oriented_distance_vector(self, object_1_id, object_2_id):
         # Get the base position and orientation of object_1
         base_position_1, base_orientation_1 = p.getBasePositionAndOrientation(object_1_id)
@@ -116,72 +127,91 @@ class PredatorPreyMAEnv(BaseMAEnv):
         return relative_position_base_frame
 
     def get_observation(self, agent_id):
-        if agent_id == 'predator':
-            pybullet_this_id = self.pybullet_predator_id
-            pybullet_other_id = self.pybullet_prey_id
-        else:
-            pybullet_this_id = self.pybullet_prey_id
-            pybullet_other_id = self.pybullet_predator_id
-
-        this_position,_ = p.getBasePositionAndOrientation(pybullet_this_id)
-        this_position = np.array(this_position[:2])
-
-        other_position,_ = p.getBasePositionAndOrientation(pybullet_other_id)
-        other_position = np.array(other_position[:2])
-        #return other_position - this_position
-
-        distance_vector_to_the_rival = np.array(self.get_oriented_distance_vector(pybullet_this_id, pybullet_other_id)[:2])
-        return np.append(this_position, distance_vector_to_the_rival)
+        my_pos = self.get_position(agent_id)
+        obs = np.array([])
+        # self.agents is a dictionary, but according to the spec the order of the agents should be preserved
+        for other_agent_id in self.agents:
+            if other_agent_id != agent_id:
+                pos = self.get_position(other_agent_id)
+                obs = np.append(obs, pos - my_pos)
+        return obs
 
     def get_env_state_results(self):
         truncated = False
-        rewards = {'predator': 0, 'prey': 0}
+        rewards = {}
         infos = {}   
 
-        predator_pos = self.get_position_predator()
-        prey_pos = self.get_position_prey()
-        #distance = np.linalg.norm(predator_pos - prey_pos)  # Calculate distance between the two, not used in this example
-        if(p.getContactPoints(self.pybullet_predator_id, self.pybullet_prey_id)):
-            # Predator wins
+        if self.is_any_predator_touching_prey():
+            # Predators win
             terminated = True
-            rewards['predator'] = 10
+            rewards.update(self.reward_predators(+10))
             rewards['prey'] = -10
             print("Captured!")
         else:        
+            predator_out = self.is_any_predator_out_of_bounds()
             limit_perimeter = self.perimeter_side / 2
-            predator_out = np.any(np.logical_or(predator_pos < -limit_perimeter, predator_pos > limit_perimeter))
+            prey_pos = self.get_position('prey')
             prey_out = np.any(np.logical_or(prey_pos < -limit_perimeter, prey_pos > limit_perimeter))
             if predator_out:
                 terminated = True
-                rewards['predator'] = -100
+                rewards.update(self.reward_predators(-100))
                 print("Predator: Out of bounds!")
                 rewards['prey'] = 10 # Prey wins
             elif prey_out:
                 terminated = True
                 rewards['prey'] = -100
                 print("Prey: Out of bounds!")
-                rewards['predator'] = 10 # Predator wins
+                rewards.update(self.reward_predators(+10)) # Predator wins
             else:
                 # prey wins +1 per time step, predator loses 1
-                rewards['predator'] -= 0.1
-                rewards['prey'] += 0.1
+                rewards.update(self.reward_predators(-0.1))
+                rewards['prey'] = 0.1
                 terminated = False
 
         return rewards, terminated, truncated, infos
     
-    def get_position_predator(self):
-        predator_pos,_ = p.getBasePositionAndOrientation(self.pybullet_predator_id)
-        return np.array([predator_pos[:2]])
+    def is_any_predator_touching_prey(self):
+        for predator_id in self.pybullet_predators_ids:
+            if p.getContactPoints(predator_id, self.pybullet_prey_id):
+                return True
+        return False
+    
+    def is_any_predator_out_of_bounds(self):
+        limit_perimeter = self.perimeter_side / 2
+        for predator_id in self.pybullet_predators_ids:
+            predator_pos,_ = p.getBasePositionAndOrientation(predator_id)
+            predator_pos = np.array([predator_pos[:2]])
+            if np.any(np.logical_or(predator_pos < -limit_perimeter, predator_pos > limit_perimeter)):
+                return True
+        return False
 
-    def get_position_prey(self):
-        prey_pos,_ = p.getBasePositionAndOrientation(self.pybullet_prey_id)
-        return np.array([prey_pos[:2]])
+    def reward_predators(self, reward):
+        rewards = {}
+        for agent_id in self.agents:
+            if agent_id.startswith('predator'):
+                rewards[agent_id] = reward
+        return rewards
+
+    def get_position(self, agent_id):
+        if agent_id.startswith('predator'):
+            pybullet_id = self.get_pybullet_id(agent_id)
+        else:
+            pybullet_id = self.pybullet_prey_id
+
+        pos,_ = p.getBasePositionAndOrientation(pybullet_id)
+        return np.array([pos[:2]])
 
     def move(self, agent_id, force_x, force_y):
         factor = 100
         force_x *= factor
         force_y *= factor
         p.applyExternalForce(agent_id, -1, [force_x, force_y, 0], [0, 0, 0], p.LINK_FRAME)
+
+    def get_pybullet_id(self, agent_id):
+        if agent_id.startswith('predator'):
+            return int(self.pybullet_predators_ids[int(agent_id.split('_')[-1])])
+        else:
+            return self.pybullet_prey_id
 
     def render(self, mode='human'):
         pass  # Rendering handled in real-time if GUI mode is enabled
@@ -266,18 +296,3 @@ class PredatorPreyMAEnv(BaseMAEnv):
                             baseVisualShapeIndex=wall_visual,
                             basePosition=positions[i],
                             baseOrientation=orientations[i])
-
-
-def print_link_names_and_indices(id):
-    """
-    Prints the link names and indices of an object.
-
-    :param id: The ID of the object in the PyBullet simulation
-    """
-    num_joints = p.getNumJoints(id)
-    print(f"Object ID: {id} has {num_joints} joints/links.")
-
-    for i in range(num_joints):
-        link_info = p.getJointInfo(id, i)
-        link_name = link_info[12].decode('utf-8')  # Link name is at index 12
-        print(f"Link Index: {i}, Link Name: {link_name}")
