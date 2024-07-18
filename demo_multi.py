@@ -44,8 +44,8 @@ if __name__ == "__main__":
         models = {'predator':model_predator, 'prey': model_prey}
         ma_env.set_agent_models(models=models)
 
-        total_timesteps_per_agent = 500_000
-        training_iterations = 50
+        total_timesteps_per_agent = 200_000
+        training_iterations = 20
         steps_per_iteration = total_timesteps_per_agent // training_iterations
 
         for i in range(training_iterations):

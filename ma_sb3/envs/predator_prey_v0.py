@@ -44,11 +44,11 @@ class PredatorPreyMAEnv(BaseMAEnv):
         # Create the agents
         vision_length = self.perimeter_side / 2
         self.register_agent(agent_id='predator',
-                        observation_space=Box(low=np.array([-self.perimeter_side, -self.perimeter_side, -vision_length, -vision_length]), high=np.array([self.perimeter_side, self.perimeter_side, vision_length, vision_length]), shape=(4,), dtype=np.float32),
+                        observation_space=Box(low=np.array([-self.perimeter_side/2, -self.perimeter_side/2, -vision_length, -vision_length]), high=np.array([self.perimeter_side/2, self.perimeter_side/2, vision_length, vision_length]), shape=(4,), dtype=np.float32),
                         action_space=Box(low=np.array([-10, -10]), high=np.array([10, 10]), shape=(2,), dtype=np.float32)
                         )
         self.register_agent(agent_id='prey',
-                        observation_space=Box(low=np.array([-self.perimeter_side, -self.perimeter_side, -vision_length, -vision_length]), high=np.array([self.perimeter_side, self.perimeter_side, vision_length, vision_length]), shape=(4,), dtype=np.float32),
+                        observation_space=Box(low=np.array([-self.perimeter_side/2, -self.perimeter_side/2, -vision_length, -vision_length]), high=np.array([self.perimeter_side/2, self.perimeter_side/2, vision_length, vision_length]), shape=(4,), dtype=np.float32),
                         action_space=Box(low=np.array([-10, -10]), high=np.array([10, 10]), shape=(2,), dtype=np.float32)
                         )
         

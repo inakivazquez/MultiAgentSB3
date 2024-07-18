@@ -47,17 +47,17 @@ class MultiPredatorPreyMAEnv(BaseMAEnv):
         vision_length = self.perimeter_side / 2
 
         # Create the agents
-        obs_space_len = 2 * (n_predators - 1) + 2 # x,y per other predator + x,y of prey
+        obs_space_others_len = 2 * (n_predators - 1) + 2 # x,y per other predator + x,y of prey
         for i in range(n_predators):
             self.register_agent(agent_id=f'predator_{i}',
-                            observation_space=Box(low=np.array([-vision_length]*obs_space_len), high=np.array([vision_length]*obs_space_len), shape=(obs_space_len,), dtype=np.float32),
+                            observation_space=Box(low=np.array([-self.perimeter_side/2,-self.perimeter_side/2] + [-vision_length]*obs_space_others_len), high=np.array([self.perimeter_side/2,self.perimeter_side/2] + [vision_length]*obs_space_others_len), shape=(2+obs_space_others_len,), dtype=np.float32),
                             action_space=Box(low=np.array([-10, -10]), high=np.array([10, 10]), shape=(2,), dtype=np.float32),
                             model_name='predator'
                             )
 
-        obs_space_len = 2 * n_predators # x,y per each predator
+        obs_space_others_len = 2 * n_predators # x,y per each predator
         self.register_agent(agent_id='prey',
-                        observation_space=Box(low=np.array([-vision_length]*obs_space_len), high=np.array([vision_length]*obs_space_len), shape=(obs_space_len,), dtype=np.float32),
+                        observation_space=Box(low=np.array([-self.perimeter_side/2,-self.perimeter_side/2] + [-vision_length]*obs_space_others_len), high=np.array([self.perimeter_side/2,self.perimeter_side/2] + [vision_length]*obs_space_others_len), shape=(2+obs_space_others_len,), dtype=np.float32),
                         action_space=Box(low=np.array([-10, -10]), high=np.array([10, 10]), shape=(2,), dtype=np.float32),
                         model_name='prey'
                         )
@@ -128,12 +128,12 @@ class MultiPredatorPreyMAEnv(BaseMAEnv):
 
     def get_observation(self, agent_id):
         my_pos = self.get_position(agent_id)
-        obs = np.array([])
+        obs = my_pos
         # self.agents is a dictionary, but according to the spec the order of the agents should be preserved
         for other_agent_id in self.agents:
             if other_agent_id != agent_id:
-                pos = self.get_position(other_agent_id)
-                obs = np.append(obs, pos - my_pos)
+                distance_vector_to_other = self.get_oriented_distance_vector(self.get_pybullet_id(agent_id), self.get_pybullet_id(other_agent_id))[:2]
+                obs = np.append(obs, distance_vector_to_other)
         return obs
 
     def get_env_state_results(self):
