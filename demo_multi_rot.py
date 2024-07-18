@@ -1,4 +1,4 @@
-from ma_sb3.envs import MultiPredatorPreyMAEnv
+from ma_sb3.envs.multipredator_prey_rot_v0 import MultiPredatorPreyMAEnv
 from ma_sb3 import TimeLimitMAEnv
 
 from gymnasium.wrappers.time_limit import TimeLimit
@@ -19,7 +19,7 @@ if __name__ == "__main__":
     prey_algo = PPO
 
     if train:
-        ma_env = MultiPredatorPreyMAEnv(n_predators=2, perimeter_side=10, render=False)
+        ma_env = MultiPredatorPreyMAEnv(n_predators=1, perimeter_side=10, render=False)
         ma_env = TimeLimitMAEnv(ma_env, max_episode_steps=100)
 
         agents_envs = ma_env.get_agents_envs()
@@ -44,15 +44,15 @@ if __name__ == "__main__":
         models = {'predator':model_predator, 'prey': model_prey}
         ma_env.set_agent_models(models=models)
 
-        total_timesteps_per_agent = 100_000
-        training_iterations = 10
+        total_timesteps_per_agent = 200_000
+        training_iterations = 20
         steps_per_iteration = total_timesteps_per_agent // training_iterations
 
         for i in range(training_iterations):
             print(f"Training iteration {i}")
             for model_name, model in models.items():
                 algo_name = model.__class__.__name__
-                model.learn(total_timesteps=steps_per_iteration, progress_bar=True, reset_num_timesteps=False, tb_log_name=f"multi{model_name}_{algo_name}")
+                model.learn(total_timesteps=steps_per_iteration, progress_bar=True, reset_num_timesteps=False, tb_log_name=f"multirot{model_name}_{algo_name}")
 
         ma_env.close()
 
@@ -61,7 +61,7 @@ if __name__ == "__main__":
         
 
     # TESTING SECTION
-    ma_env = MultiPredatorPreyMAEnv(n_predators=2, perimeter_side=10, render=True)
+    ma_env = MultiPredatorPreyMAEnv(n_predators=1, perimeter_side=10, render=True)
     ma_env = TimeLimitMAEnv(ma_env, max_episode_steps=100)
 
     model_predator = predator_algo.load(f"policies/model_multipredator_{predator_algo.__name__}")

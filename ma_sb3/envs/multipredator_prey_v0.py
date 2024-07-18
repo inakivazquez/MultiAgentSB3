@@ -35,7 +35,8 @@ class MultiPredatorPreyMAEnv(BaseMAEnv):
 
         self.pybullet_predators_ids = []
         for _ in range(n_predators):
-            predator_id = p.loadURDF("cube.urdf", [0, 0, 0], useFixedBase=False, globalScaling=0.3)
+            #predator_id = p.loadURDF("cube.urdf", [0, 0, 0], useFixedBase=False, globalScaling=0.3)
+            predator_id = self.create_disc(0.25, 0.1)
             self.pybullet_predators_ids.append(predator_id)
             p.changeVisualShape(predator_id, -1, rgbaColor=[0.8, 0.1, 0.1, 1])
 
@@ -201,11 +202,11 @@ class MultiPredatorPreyMAEnv(BaseMAEnv):
         pos,_ = p.getBasePositionAndOrientation(pybullet_id)
         return np.array([pos[:2]])
 
-    def move(self, agent_id, force_x, force_y):
+    def move(self, pybullet_object_id, force_x, force_y):
         factor = 100
         force_x *= factor
         force_y *= factor
-        p.applyExternalForce(agent_id, -1, [force_x, force_y, 0], [0, 0, 0], p.LINK_FRAME)
+        p.applyExternalForce(pybullet_object_id, -1, [force_x, force_y, 0], [0, 0, 0], p.LINK_FRAME)
 
     def get_pybullet_id(self, agent_id):
         if agent_id.startswith('predator'):
@@ -296,3 +297,39 @@ class MultiPredatorPreyMAEnv(BaseMAEnv):
                             baseVisualShapeIndex=wall_visual,
                             basePosition=positions[i],
                             baseOrientation=orientations[i])
+
+    def create_disc(self, radius, height):
+        """
+        Create a disc (cylinder) in PyBullet with the specified radius, height, and color.
+        
+        :param radius: Radius of the cylinder.
+        :param height: Height of the cylinder (making it like a disc).
+        :param color: Color of the cylinder in RGBA format (e.g., [1, 0, 0, 1] for red).
+        :return: The ID of the created disc.
+        """
+        # Create a visual shape for the cylinder
+        cylinder_visual = p.createVisualShape(
+            shapeType=p.GEOM_CYLINDER,
+            radius=radius,
+            length=height,
+            visualFramePosition=[0, 0, height / 2], 
+            specularColor=[0, 0, 0]
+        )
+
+        # Create a collision shape for the cylinder
+        cylinder_collision = p.createCollisionShape(
+            shapeType=p.GEOM_CYLINDER,
+            radius=radius,
+            height=height,
+            collisionFramePosition=[0, 0, height / 2]
+        )
+
+        # Create a multi-body object using the visual and collision shapes
+        cylinder_id = p.createMultiBody(
+            baseMass=1,  # Mass of the cylinder
+            baseCollisionShapeIndex=cylinder_collision,
+            baseVisualShapeIndex=cylinder_visual,
+            basePosition=[0, 0, height / 2]  # Position the cylinder on the plane
+        )
+
+        return cylinder_id
