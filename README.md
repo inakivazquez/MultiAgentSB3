@@ -13,3 +13,5 @@ Main features:
 
 Several demo multi-agent environments are provided for testing:
 * `PredatorPreyMAEnv`: a classical predator-prey environment based on Pybullet.
+<img src="https://github.com/user-attachments/assets/ef6ce57f-e094-4807-b003-bacc72d701ec" height="200" alt="Predator-Prey"/>
+
