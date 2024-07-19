@@ -10,6 +10,7 @@ import time
 
 import pybullet as p
 import random
+import os
 
 class MultiPredatorPreyMAEnv(BaseMAEnv):
 
@@ -35,8 +36,7 @@ class MultiPredatorPreyMAEnv(BaseMAEnv):
 
         self.pybullet_predators_ids = []
         for _ in range(n_predators):
-            #predator_id = p.loadURDF("cube.urdf", [0, 0, 0], useFixedBase=False, globalScaling=0.3)
-            predator_id = self.create_disc(0.25, 0.1)
+            predator_id = p.loadURDF("cube.urdf", [0, 0, 0], useFixedBase=False, globalScaling=0.3)
             self.pybullet_predators_ids.append(predator_id)
             p.changeVisualShape(predator_id, -1, rgbaColor=[0.8, 0.1, 0.1, 1])
 
@@ -51,14 +51,16 @@ class MultiPredatorPreyMAEnv(BaseMAEnv):
         obs_space_others_len = 2 * (n_predators - 1) + 2 # x,y per other predator + x,y of prey
         for i in range(n_predators):
             self.register_agent(agent_id=f'predator_{i}',
-                            observation_space=Box(low=np.array([-self.perimeter_side/2,-self.perimeter_side/2] + [-vision_length]*obs_space_others_len), high=np.array([self.perimeter_side/2,self.perimeter_side/2] + [vision_length]*obs_space_others_len), shape=(2+obs_space_others_len,), dtype=np.float32),
+                            #observation_space=Box(low=np.array([-self.perimeter_side/2,-self.perimeter_side/2] + [-vision_length]*obs_space_others_len), high=np.array([self.perimeter_side/2,self.perimeter_side/2] + [vision_length]*obs_space_others_len), shape=(2+obs_space_others_len,), dtype=np.float32),
+                            observation_space=Box(low=np.array([-self.perimeter_side/2]*2*(n_predators+1)), high=np.array([self.perimeter_side/2]*2*(n_predators+1)), shape=(2*(n_predators+1),), dtype=np.float32),
                             action_space=Box(low=np.array([-10, -10]), high=np.array([10, 10]), shape=(2,), dtype=np.float32),
                             model_name='predator'
                             )
 
         obs_space_others_len = 2 * n_predators # x,y per each predator
         self.register_agent(agent_id='prey',
-                        observation_space=Box(low=np.array([-self.perimeter_side/2,-self.perimeter_side/2] + [-vision_length]*obs_space_others_len), high=np.array([self.perimeter_side/2,self.perimeter_side/2] + [vision_length]*obs_space_others_len), shape=(2+obs_space_others_len,), dtype=np.float32),
+                        #observation_space=Box(low=np.array([-self.perimeter_side/2,-self.perimeter_side/2] + [-vision_length]*obs_space_others_len), high=np.array([self.perimeter_side/2,self.perimeter_side/2] + [vision_length]*obs_space_others_len), shape=(2+obs_space_others_len,), dtype=np.float32),
+                        observation_space=Box(low=np.array([-self.perimeter_side/2]*2*(n_predators+1)), high=np.array([self.perimeter_side/2]*2*(n_predators+1)), shape=(2*(n_predators+1),), dtype=np.float32),
                         action_space=Box(low=np.array([-10, -10]), high=np.array([10, 10]), shape=(2,), dtype=np.float32),
                         model_name='prey'
                         )
@@ -128,6 +130,15 @@ class MultiPredatorPreyMAEnv(BaseMAEnv):
         return relative_position_base_frame
 
     def get_observation(self, agent_id):
+        my_pos = self.get_position(agent_id) # My position
+        obs = my_pos
+        # self.agents is a dictionary, but according to the spec the order of the agents should be preserved
+        for other_agent_id in self.agents:
+            if other_agent_id != agent_id:
+                other_pos = self.get_position(other_agent_id)
+                obs = np.append(obs, other_pos)
+        return obs
+        """
         my_pos = self.get_position(agent_id)
         obs = my_pos
         # self.agents is a dictionary, but according to the spec the order of the agents should be preserved
@@ -136,6 +147,7 @@ class MultiPredatorPreyMAEnv(BaseMAEnv):
                 distance_vector_to_other = self.get_oriented_distance_vector(self.get_pybullet_id(agent_id), self.get_pybullet_id(other_agent_id))[:2]
                 obs = np.append(obs, distance_vector_to_other)
         return obs
+        """
 
     def get_env_state_results(self):
         truncated = False
@@ -200,7 +212,7 @@ class MultiPredatorPreyMAEnv(BaseMAEnv):
             pybullet_id = self.pybullet_prey_id
 
         pos,_ = p.getBasePositionAndOrientation(pybullet_id)
-        return np.array([pos[:2]])
+        return np.array(pos[:2])
 
     def move(self, pybullet_object_id, force_x, force_y):
         factor = 100
@@ -298,38 +310,3 @@ class MultiPredatorPreyMAEnv(BaseMAEnv):
                             basePosition=positions[i],
                             baseOrientation=orientations[i])
 
-    def create_disc(self, radius, height):
-        """
-        Create a disc (cylinder) in PyBullet with the specified radius, height, and color.
-        
-        :param radius: Radius of the cylinder.
-        :param height: Height of the cylinder (making it like a disc).
-        :param color: Color of the cylinder in RGBA format (e.g., [1, 0, 0, 1] for red).
-        :return: The ID of the created disc.
-        """
-        # Create a visual shape for the cylinder
-        cylinder_visual = p.createVisualShape(
-            shapeType=p.GEOM_CYLINDER,
-            radius=radius,
-            length=height,
-            visualFramePosition=[0, 0, height / 2], 
-            specularColor=[0, 0, 0]
-        )
-
-        # Create a collision shape for the cylinder
-        cylinder_collision = p.createCollisionShape(
-            shapeType=p.GEOM_CYLINDER,
-            radius=radius,
-            height=height,
-            collisionFramePosition=[0, 0, height / 2]
-        )
-
-        # Create a multi-body object using the visual and collision shapes
-        cylinder_id = p.createMultiBody(
-            baseMass=1,  # Mass of the cylinder
-            baseCollisionShapeIndex=cylinder_collision,
-            baseVisualShapeIndex=cylinder_visual,
-            basePosition=[0, 0, height / 2]  # Position the cylinder on the plane
-        )
-
-        return cylinder_id

@@ -12,8 +12,8 @@ if __name__ == "__main__":
 
     train = True
     #train = False
-    load_previous_predator = True
-    load_previous_prey = True
+    load_previous_predator = False
+    load_previous_prey = False
 
     predator_algo = PPO
     prey_algo = PPO
@@ -39,8 +39,8 @@ if __name__ == "__main__":
 
         ma_env.set_agent_models(models = {'predator':model_predator, 'prey': model_prey})
 
-        total_timesteps_per_agent = 50_000
-        training_iterations = 10
+        total_timesteps_per_agent = 200_000
+        training_iterations = 20
         steps_per_iteration = total_timesteps_per_agent // training_iterations
 
         for i in range(training_iterations):

@@ -42,7 +42,8 @@ class PredatorPreyMAEnv(BaseMAEnv):
         self.draw_perimeter(self.perimeter_side)
 
         # Create the agents
-        vision_length = self.perimeter_side / 2
+        vision_length = self.perimeter_side
+        """
         self.register_agent(agent_id='predator',
                         observation_space=Box(low=np.array([-self.perimeter_side/2, -self.perimeter_side/2, -vision_length, -vision_length]), high=np.array([self.perimeter_side/2, self.perimeter_side/2, vision_length, vision_length]), shape=(4,), dtype=np.float32),
                         action_space=Box(low=np.array([-10, -10]), high=np.array([10, 10]), shape=(2,), dtype=np.float32)
@@ -51,7 +52,16 @@ class PredatorPreyMAEnv(BaseMAEnv):
                         observation_space=Box(low=np.array([-self.perimeter_side/2, -self.perimeter_side/2, -vision_length, -vision_length]), high=np.array([self.perimeter_side/2, self.perimeter_side/2, vision_length, vision_length]), shape=(4,), dtype=np.float32),
                         action_space=Box(low=np.array([-10, -10]), high=np.array([10, 10]), shape=(2,), dtype=np.float32)
                         )
-        
+        """
+        self.register_agent(agent_id='predator',
+                        observation_space=Box(low=np.array([-self.perimeter_side/2]*4), high=np.array([self.perimeter_side/2]*4), shape=(4,), dtype=np.float32),
+                        action_space=Box(low=np.array([-10, -10]), high=np.array([10, 10]), shape=(2,), dtype=np.float32)
+                        )
+        self.register_agent(agent_id='prey',
+                        observation_space=Box(low=np.array([-self.perimeter_side/2]*4), high=np.array([self.perimeter_side/2]*4), shape=(4,), dtype=np.float32),
+                        action_space=Box(low=np.array([-10, -10]), high=np.array([10, 10]), shape=(2,), dtype=np.float32)
+                        )
+
         self.max_speed_predator = max_speed_predator
         self.max_speed_prey = max_speed_prey
 
@@ -116,6 +126,10 @@ class PredatorPreyMAEnv(BaseMAEnv):
         return relative_position_base_frame
 
     def get_observation(self, agent_id):
+        prey_pos = self.get_position_prey()
+        predator_pos = self.get_position_predator()
+        return np.append(predator_pos, prey_pos)
+        """
         if agent_id == 'predator':
             pybullet_this_id = self.pybullet_predator_id
             pybullet_other_id = self.pybullet_prey_id
@@ -132,6 +146,7 @@ class PredatorPreyMAEnv(BaseMAEnv):
 
         distance_vector_to_the_rival = np.array(self.get_oriented_distance_vector(pybullet_this_id, pybullet_other_id)[:2])
         return np.append(this_position, distance_vector_to_the_rival)
+        """
 
     def get_env_state_results(self):
         truncated = False
@@ -171,14 +186,14 @@ class PredatorPreyMAEnv(BaseMAEnv):
     
     def get_position_predator(self):
         predator_pos,_ = p.getBasePositionAndOrientation(self.pybullet_predator_id)
-        return np.array([predator_pos[:2]])
+        return np.array(predator_pos[:2])
 
     def get_position_prey(self):
         prey_pos,_ = p.getBasePositionAndOrientation(self.pybullet_prey_id)
-        return np.array([prey_pos[:2]])
+        return np.array(prey_pos[:2])
 
     def move(self, pybullet_object_id, force_x, force_y):
-        factor = 100
+        factor =100
         force_x *= factor
         force_y *= factor
         p.applyExternalForce(pybullet_object_id, -1, [force_x, force_y, 0], [0, 0, 0], p.LINK_FRAME)

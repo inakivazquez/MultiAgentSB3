@@ -1,4 +1,4 @@
-from ma_sb3.envs.multipredator_prey_rot_v0 import MultiPredatorPreyMAEnv
+from ma_sb3.envs.multipredator_prey_ray_v0 import MultiPredatorPreyMAEnv
 from ma_sb3 import TimeLimitMAEnv
 
 from gymnasium.wrappers.time_limit import TimeLimit
@@ -11,9 +11,9 @@ import pybullet as p
 if __name__ == "__main__":
 
     train = True
-    train = False
-    load_previous_predator = True
-    load_previous_prey = True
+    #train = False
+    load_previous_predator = False
+    load_previous_prey = False
 
     predator_algo = PPO
     prey_algo = PPO
@@ -52,7 +52,7 @@ if __name__ == "__main__":
             print(f"Training iteration {i}")
             for model_name, model in models.items():
                 algo_name = model.__class__.__name__
-                model.learn(total_timesteps=steps_per_iteration, progress_bar=True, reset_num_timesteps=False, tb_log_name=f"multirot{model_name}_{algo_name}")
+                model.learn(total_timesteps=steps_per_iteration, progress_bar=True, reset_num_timesteps=False, tb_log_name=f"ray_multi{model_name}_{algo_name}")
 
         ma_env.close()
 
