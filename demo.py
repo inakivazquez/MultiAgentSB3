@@ -11,7 +11,7 @@ import pybullet as p
 if __name__ == "__main__":
 
     train = True
-    #train = False
+    train = False
     load_previous_predator = False
     load_previous_prey = False
 
