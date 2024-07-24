@@ -1,75 +1,67 @@
 from ma_sb3.envs.soccer_v0 import SoccerEnv
 from ma_sb3 import TimeLimitMAEnv
 
-from gymnasium.wrappers.time_limit import TimeLimit
-
 from stable_baselines3 import PPO, SAC
-import pybullet as p
 
+import time
 
 # Example of running the environment
 if __name__ == "__main__":
 
     train = True
-    #train = False
-    load_previous_predator = False
-    load_previous_prey = False
+    train = False
+    load_previous_model = False
 
-    predator_algo = PPO
-    prey_algo = PPO
+    algo = SAC
 
     if train:
-        ma_env = SoccerEnv(n_predators=2, perimeter_side=10, render=True)
+        ma_env = SoccerEnv(n_team_players=2, perimeter_side=10, render=False)
         ma_env = TimeLimitMAEnv(ma_env, max_episode_steps=1000)
 
         agents_envs = ma_env.get_agents_envs()
         models = {}
-        env_prey = agents_envs['prey']
-        env_predator = None
 
-        for agent_id, env in agents_envs.items(): 
-            if agent_id.startswith('predator'):
-                env_predator = env
-                break
+        env_red = agents_envs['red_0']
+        env_blue = agents_envs['blue_0']
 
-        if load_previous_predator:
-            model_predator = predator_algo.load(f"policies/model_soccer_{predator_algo.__name__}", env_predator, tensorboard_log="./logs")
+        envs = [env_red, env_blue]
+        envs = {'red':env_red, 'blue':env_blue}
+
+        env_initial = env_red
+
+        if load_previous_model:
+            model_player = algo.load(f"policies/model_soccer_{algo.__name__}", env_initial, tensorboard_log="./logs")
         else:
-            model_predator = predator_algo("MlpPolicy", env_predator, verbose=1, tensorboard_log="./logs")
-        if load_previous_prey:
-            model_prey = prey_algo.load(f"policies/model_soccer_{prey_algo.__name__}", env_prey, tensorboard_log="./logs")
-        else:
-            model_prey = prey_algo("MlpPolicy", env_prey, verbose=1, tensorboard_log="./logs")
+            model_player = algo("MlpPolicy", env_initial, verbose=1, tensorboard_log="./logs")
 
-        models = {'predator':model_predator, 'prey': model_prey}
+        models = {'soccer_player':model_player}
         ma_env.set_agent_models(models=models)
 
-        total_timesteps_per_agent = 200_000
-        training_iterations = 2
+        total_timesteps_per_agent = 50_000
+        training_iterations = 5
         steps_per_iteration = total_timesteps_per_agent // training_iterations
 
         for i in range(training_iterations):
             print(f"Training iteration {i}")
-            for model_name, model in models.items():
-                algo_name = model.__class__.__name__
-                #if model_name == 'predator':
-                #if model_name == 'prey':
-                model.learn(total_timesteps=steps_per_iteration, progress_bar=True, reset_num_timesteps=False, tb_log_name=f"soccer{model_name}_{algo_name}")
+            for model_name, model_player in models.items():
+                algo_name = model_player.__class__.__name__
+                for env_name, env in envs.items():
+                    print(f"Training the {env_name} team...")
+                    model_player.set_env(env)
+                    model_player.learn(total_timesteps=steps_per_iteration, progress_bar=True, reset_num_timesteps=False, tb_log_name=f"{model_name}_{algo_name}")
 
         ma_env.close()
 
-        model_predator.save(f"policies/model_soccer_{predator_algo.__name__}")
-        model_prey.save(f"policies/model_soccer_{prey_algo.__name__}")
+        model_player.save(f"policies/model_soccer_{algo.__name__}")
         
 
     # TESTING SECTION
-    ma_env = SoccerEnv(n_predators=2, perimeter_side=10, render=True)
+    ma_env = SoccerEnv(n_team_players=2, perimeter_side=10, render=True)
     ma_env = TimeLimitMAEnv(ma_env, max_episode_steps=1000)
 
-    model_predator = predator_algo.load(f"policies/model_soccer_{predator_algo.__name__}")
-    model_prey = prey_algo.load(f"policies/model_soccer_{prey_algo.__name__}")
-
-    models = {'predator':model_predator, 'prey': model_prey}
+    model_player = algo.load(f"policies/model_soccer_{algo.__name__}")
+ 
+    models = {'soccer_player':model_player}
 
     for _ in range(50):
         obs, info = ma_env.reset()
@@ -79,9 +71,9 @@ if __name__ == "__main__":
         while not terminated and not truncated:
             actions = {}
             for agent_id, agent_obs in obs.items():
-                model_id = 'predator' if agent_id.startswith('predator') else 'prey'
-                actions[agent_id] = models[model_id].predict(agent_obs)[0]
-            #print("Actions:", actions)
+                actions[agent_id] = models['soccer_player'].predict(agent_obs)[0]
             obs, rewards, terminated, truncated , _= ma_env.step_all(actions)
+            print(actions['red_0'])
+
 
     ma_env.close()
