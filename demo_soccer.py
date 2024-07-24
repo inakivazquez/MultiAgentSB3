@@ -2,6 +2,7 @@ from ma_sb3.envs.soccer_v0 import SoccerEnv
 from ma_sb3 import TimeLimitMAEnv
 
 from stable_baselines3 import PPO, SAC
+from gymnasium.wrappers.normalize import NormalizeObservation
 
 import time
 
@@ -14,8 +15,10 @@ if __name__ == "__main__":
 
     algo = SAC
 
+    n_team_players = 1
+
     if train:
-        ma_env = SoccerEnv(n_team_players=2, perimeter_side=10, render=False)
+        ma_env = SoccerEnv(n_team_players=n_team_players, perimeter_side=10, render=False)
         ma_env = TimeLimitMAEnv(ma_env, max_episode_steps=1000)
 
         agents_envs = ma_env.get_agents_envs()
@@ -24,8 +27,10 @@ if __name__ == "__main__":
         env_red = agents_envs['red_0']
         env_blue = agents_envs['blue_0']
 
-        envs = [env_red, env_blue]
+        env_red = NormalizeObservation(env_red)
+
         envs = {'red':env_red, 'blue':env_blue}
+        envs = {'red':env_red}
 
         env_initial = env_red
 
@@ -38,7 +43,7 @@ if __name__ == "__main__":
         ma_env.set_agent_models(models=models)
 
         total_timesteps_per_agent = 50_000
-        training_iterations = 5
+        training_iterations = 1
         steps_per_iteration = total_timesteps_per_agent // training_iterations
 
         for i in range(training_iterations):
@@ -48,7 +53,7 @@ if __name__ == "__main__":
                 for env_name, env in envs.items():
                     print(f"Training the {env_name} team...")
                     model_player.set_env(env)
-                    model_player.learn(total_timesteps=steps_per_iteration, progress_bar=True, reset_num_timesteps=False, tb_log_name=f"{model_name}_{algo_name}")
+                    model_player.learn(total_timesteps=steps_per_iteration, progress_bar=True, reset_num_timesteps=False, tb_log_name=f"{model_name}{n_team_players}p_{algo_name}")
 
         ma_env.close()
 
@@ -56,7 +61,7 @@ if __name__ == "__main__":
         
 
     # TESTING SECTION
-    ma_env = SoccerEnv(n_team_players=2, perimeter_side=10, render=True)
+    ma_env = SoccerEnv(n_team_players=n_team_players, perimeter_side=10, render=True)
     ma_env = TimeLimitMAEnv(ma_env, max_episode_steps=1000)
 
     model_player = algo.load(f"policies/model_soccer_{algo.__name__}")

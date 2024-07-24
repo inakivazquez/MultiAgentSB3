@@ -13,6 +13,9 @@ import random
 import os
 import math
 
+from pynput import keyboard
+
+
 class SoccerEnv(BaseMAEnv):
 
     SIMULATION_STEP_DELAY = 1. / 240.
@@ -61,7 +64,8 @@ class SoccerEnv(BaseMAEnv):
 
         # Create the agents
         # Observation space is the team of the agent (0=red or 1=blue) to know where to score the goal
-        # and position of the agent, orientation in z (radians) the vectors to other agents in the team, the vectors to other agents in the opposite team, and finally the vector to the ball
+        # and position of the agent, and velocity x and y
+        # and finally the vectors to other agents in the team, the vectors to other agents in the opposite team, and finally the vector to the ball
         n_other_agents = 2*n_team_players - 1
 
         teams = ['red', 'blue']
@@ -69,31 +73,31 @@ class SoccerEnv(BaseMAEnv):
         for team in teams:
             for i in range(n_team_players):
                 self.register_agent(agent_id=f'{team}_{i}',
-                                observation_space=Box(low=np.array([-1, -self.perimeter_side/2,-self.perimeter_side/2, -2*math.pi] + [-vision_length]*2*(n_other_agents+1)), high=np.array([1, self.perimeter_side/2,self.perimeter_side/2, 2*math.pi] + [vision_length]*2*(n_other_agents+1)), shape=(4+2*(n_other_agents+1),), dtype=np.float32),
+                                observation_space=Box(low=np.array([-1, -self.perimeter_side/2,-self.perimeter_side/2, -10, -10] + [-vision_length]*2*(n_other_agents+1)), high=np.array([1, self.perimeter_side/2,self.perimeter_side/2, +10, +10] + [vision_length]*2*(n_other_agents+1)), shape=(5+2*(n_other_agents+1),), dtype=np.float32),
                                 action_space=Box(low=np.array([-10, -10]), high=np.array([10, 10]), shape=(2,), dtype=np.float32),
                                 model_name='soccer_player'
                                 )
        
         self.max_speed = max_speed
+        self.players_touched_ball = set()
+
+        self.pybullet_text_id = None
+
+        #self.key_control(self.pybullet_reds_ids[0])
 
     def step_simulation(self):
         p.stepSimulation()
         if self.render_mode:
             time.sleep(self.SIMULATION_STEP_DELAY)
 
-    def sync_wait_for_actions_completion(self, sim_steps=100):
+    def sync_wait_for_actions_completion(self, sim_steps=10):
+        self.players_touched_ball = set()
         for _ in range(sim_steps):
             self.step_simulation()
-            #if self.player_touching_ball() is not None:
-                #break
-            # Wait until players are no longer moving
-            for agent_id in self.agents:
-                pybullet_id = self.get_pybullet_id(agent_id)
-                velocity, _ = p.getBaseVelocity(pybullet_id)
-                velocity = math.sqrt(velocity[0]**2 + velocity[1]**2)
-                if velocity < 0.001:
-                    break
-        
+            player_touching_ball = self.player_touching_ball()
+            if player_touching_ball is not None:
+                self.players_touched_ball.add(player_touching_ball)
+
     def reset(self, seed=0):
         limit_spawn_perimeter = self.perimeter_side / 2 -1
         random_coor = lambda: random.uniform(0, limit_spawn_perimeter)
@@ -117,9 +121,9 @@ class SoccerEnv(BaseMAEnv):
         force_y = action[1]
 
         pybullet_object_id = self.get_pybullet_id(agent_id)
-        max = self.max_speed
 
         # Limit the speed
+        max = self.max_speed
         velocity, _ = p.getBaseVelocity(pybullet_object_id)
         velocity = math.sqrt(velocity[0]**2 + velocity[1]**2)
         if velocity > max:
@@ -166,7 +170,13 @@ class SoccerEnv(BaseMAEnv):
         obs = np.append(obs, my_pos)
 
         my_pybullet_id = self.get_pybullet_id(agent_id)
-        obs = np.append(obs, self.get_orientation(my_pybullet_id))
+
+        # Now my orientation, nos used finally
+        #obs = np.append(obs, self.get_orientation(my_pybullet_id))
+
+        # Now my velocity
+        my_velocity, _ = p.getBaseVelocity(my_pybullet_id)
+        obs = np.append(obs, my_velocity[:2])
 
         # Now the other players, first my teammates
         my_team_vectors = []
@@ -208,15 +218,15 @@ class SoccerEnv(BaseMAEnv):
         goal = self.is_goal()
 
         if player_out_of_bounds:
-            rewards[player_out_of_bounds] -= 100
+            #rewards[player_out_of_bounds] -= 100
             terminated = True
             print(f"Player {player_out_of_bounds} is out of bounds")
         elif goal:
                 if goal == 'red':
                     rewards = self.update_reward_team(rewards, 'red', 100)
-                    rewards = self.update_reward_team(rewards, 'blue', -50)
+                    #rewards = self.update_reward_team(rewards, 'blue', -50)
                 else:
-                    rewards = self.update_reward_team(rewards, 'red', -50)
+                    #rewards = self.update_reward_team(rewards, 'red', -50)
                     rewards = self.update_reward_team(rewards, 'blue', 100)
                 terminated = True
                 print(f"Goal scored by the {goal} team")
@@ -230,7 +240,7 @@ class SoccerEnv(BaseMAEnv):
             if player_touching_ball:
                 rewards[player_touching_ball] += 0.01 # Possesion reward :-)
             """
-            # Proximity reward
+            # Ball - Goal proximity reward
             distance_red_goal = self.distance_to_goal('red')
             distance_blue_goal = self.distance_to_goal('blue')
             proximity_reward_red = 0.1 * (0.5 - distance_red_goal / self.perimeter_side)
@@ -238,6 +248,23 @@ class SoccerEnv(BaseMAEnv):
             rewards = self.update_reward_team(rewards, 'red', proximity_reward_red)
             rewards = self.update_reward_team(rewards, 'blue', proximity_reward_blue)
 
+            """# Player - Ball proximity reward
+            for agent_id in self.agents:
+                agent_pos = self.get_position(agent_id)
+                ball_pos = p.getBasePositionAndOrientation(self.pybullet_ball_id)[0][:2]
+                distance = np.linalg.norm(agent_pos - ball_pos)
+                # We reward if the distance is less than 25% of the perimeter side
+                proximity_reward = 0.05 * (0.25 - distance / self.perimeter_side)
+                if proximity_reward > 0:
+                    rewards[agent_id] += proximity_reward
+            """
+
+            # Ball touched reward
+            for player_id in self.players_touched_ball:
+                rewards[player_id] += 0.1
+                print(f"Player {player_id} touched the ball")
+
+        self.show_text(f"Red: {rewards['red_0']:.3f}")
         return rewards, terminated, truncated, infos
     
     def player_touching_ball(self):
@@ -472,3 +499,58 @@ class SoccerEnv(BaseMAEnv):
                             basePosition=positions[i],
                             baseOrientation=orientations[i])
 
+
+    def show_text(self, text):
+        if self.pybullet_text_id is not None:
+            p.removeUserDebugItem(self.pybullet_text_id)
+        self.pybullet_text_id = p.addUserDebugText(text, [0, -4, 2], textColorRGB=[0, 0, 0], textSize=2)
+
+
+    def key_control(self, object_id):
+        # Define the key press handler
+        def on_press(key):
+            try:
+                # Convert key to character
+                k = key.char
+            except AttributeError:
+                k = key.name
+            
+            # Define the force to be applied
+            force_magnitude = 100
+            force = [0, 0, 0]
+            
+            # Check which key is pressed and set the force accordingly
+            if key == keyboard.Key.up:  # Apply force forward
+                force = [0, force_magnitude, 0]
+            elif key == keyboard.Key.down:  # Apply force backward
+                force = [0, -force_magnitude, 0]
+            elif key == keyboard.Key.left:  # Apply force to the left
+                force = [-force_magnitude, 0, 0]
+            elif key == keyboard.Key.right:  # Apply force to the right
+                force = [force_magnitude, 0, 0]
+            else:
+                return
+            
+            # Apply the force to the object
+            p.applyExternalForce(objectUniqueId=object_id, 
+                                linkIndex=-1,  # -1 applies the force to the base
+                                forceObj=force, 
+                                posObj=p.getBasePositionAndOrientation(object_id)[0],  # Apply the force at the object's position
+                                flags=p.WORLD_FRAME)
+        
+        # Create a keyboard listener
+        listener = keyboard.Listener(on_press=on_press)
+        listener.start()
+
+        # Keep the script running to listen for key presses
+        try:
+            while True:
+                p.stepSimulation()
+                # Get the current position of the object
+                pos, _ = p.getBasePositionAndOrientation(object_id)
+                
+                # Print the position with 2 decimal places
+                formatted_pos = [f"{coord:.2f}" for coord in pos]
+                print("Position:", formatted_pos)
+        except KeyboardInterrupt:
+                print("Keyboard interrupt detected. Exiting...")
