@@ -173,7 +173,7 @@ class SoccerEnv(BaseMAEnv):
         other_team_vectors = []
         for other_agent_id in self.agents:
             if other_agent_id != agent_id:
-                other_distance_vector = self.get_oriented_distance_vector(my_pybullet_id, self.get_pybullet_id(other_agent_id))[:2]
+                other_distance_vector = self.get_position(other_agent_id) - my_pos
                 same_team = agent_id.split('_')[0] == other_agent_id.split('_')[0]
                 if same_team:
                     my_team_vectors.append(other_distance_vector)
@@ -183,7 +183,8 @@ class SoccerEnv(BaseMAEnv):
         obs = np.append(obs, other_team_vectors)
 
         # Finally the ball
-        obs = np.append(obs, self.get_oriented_distance_vector(my_pybullet_id, self.pybullet_ball_id)[:2])
+        ball_pos = p.getBasePositionAndOrientation(self.pybullet_ball_id)[0][:2]
+        obs = np.append(obs, ball_pos - my_pos)
 
         """
         if random.random() < 0.01:

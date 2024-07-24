@@ -9,7 +9,7 @@ import time
 if __name__ == "__main__":
 
     train = True
-    train = False
+    #train = False
     load_previous_model = False
 
     algo = SAC
