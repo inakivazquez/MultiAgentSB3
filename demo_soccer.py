@@ -11,9 +11,9 @@ if __name__ == "__main__":
 
     train = True
     #train = False
-    load_previous_model = False
+    load_previous_model = True
 
-    algo = SAC
+    algo = PPO
 
     n_team_players = 1
 
@@ -42,7 +42,7 @@ if __name__ == "__main__":
         models = {'soccer_player':model_player}
         ma_env.set_agent_models(models=models)
 
-        total_timesteps_per_agent = 50_000
+        total_timesteps_per_agent = 500_000
         training_iterations = 1
         steps_per_iteration = total_timesteps_per_agent // training_iterations
 

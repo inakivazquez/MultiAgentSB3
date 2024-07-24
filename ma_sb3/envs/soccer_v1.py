@@ -20,7 +20,7 @@ class SoccerEnv(BaseMAEnv):
 
     SIMULATION_STEP_DELAY = 1. / 240.
 
-    def __init__(self, n_team_players=2, max_speed = 0.1, perimeter_side = 10, render=False):
+    def __init__(self, n_team_players=2, max_speed = 3, perimeter_side = 10, render=False):
         super(SoccerEnv, self).__init__()
         self.render_mode = render
         self.physicsClient = p.connect(p.GUI if render else p.DIRECT)
@@ -42,14 +42,16 @@ class SoccerEnv(BaseMAEnv):
         self.pybullet_blues_ids = []
 
         for _ in range(n_team_players):
-            player_id = p.loadURDF("cube.urdf", [0, 0, 0], useFixedBase=False, globalScaling=0.3)
+            player_id = p.loadURDF("cube.urdf", [0, 0, 0], useFixedBase=False, globalScaling=0.4)
             self.pybullet_reds_ids.append(player_id)
             p.changeVisualShape(player_id, -1, rgbaColor=[0.8, 0.1, 0.1, 1])
+            p.changeDynamics(bodyUniqueId=player_id, mass=1, linkIndex=-1, lateralFriction=1, spinningFriction=10, rollingFriction=10)
 
         for _ in range(n_team_players):
-            player_id = p.loadURDF("cube.urdf", [0, 0, 0], useFixedBase=False, globalScaling=0.3)
+            player_id = p.loadURDF("cube.urdf", [0, 0, 0], useFixedBase=False, globalScaling=0.4)
             self.pybullet_blues_ids.append(player_id)
             p.changeVisualShape(player_id, -1, rgbaColor=[0.1, 0.1, 0.8, 1])
+            p.changeDynamics(bodyUniqueId=player_id, mass=1, linkIndex=-1, lateralFriction=1, spinningFriction=10, rollingFriction=10)
 
         self.pybullet_ball_id = p.loadURDF("sphere2.urdf", [0, 0, 0.5], useFixedBase=False, globalScaling=0.3)
         lateral_friction = 1.0
@@ -75,7 +77,7 @@ class SoccerEnv(BaseMAEnv):
                 self.register_agent(agent_id=f'{team}_{i}',
                                 observation_space=Box(low=np.array([-1, -self.perimeter_side/2,-self.perimeter_side/2, -10, -10] + [-vision_length]*2*(n_other_agents+1)), high=np.array([1, self.perimeter_side/2,self.perimeter_side/2, +10, +10] + [vision_length]*2*(n_other_agents+1)), shape=(5+2*(n_other_agents+1),), dtype=np.float32),
                                 action_space=Box(low=np.array([-1, -1]), high=np.array([1, 1]), shape=(2,), dtype=np.float32),
-                                model_name='soccer_player'
+                                model_name=f"soccer_{team}"
                                 )
        
         self.max_speed = max_speed
@@ -127,6 +129,7 @@ class SoccerEnv(BaseMAEnv):
         velocity, _ = p.getBaseVelocity(pybullet_object_id)
         velocity = math.sqrt(velocity[0]**2 + velocity[1]**2)
         if velocity > max:
+            #print(f"Agent {agent_id} is moving too fast ({velocity} > {max})")
             #force_x /= (velocity / max)**2
             #force_y /= (velocity / max)**2
             # For impulse-based movements
@@ -352,7 +355,7 @@ class SoccerEnv(BaseMAEnv):
         return np.array(pos[:2])
 
     def move(self, pybullet_object_id, force_x, force_y):
-        factor = 1000
+        factor = 100
         force_x *= factor
         force_y *= factor
         #p.applyExternalForce(pybullet_object_id, -1, [force_x, force_y, 0], [0, 0, 0], p.LINK_FRAME)
