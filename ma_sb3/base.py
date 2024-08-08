@@ -25,8 +25,8 @@ class AgentMAEnv(Env):
         def set_model(self, model):
             self.model = model
 
-        def predict(self, obs):
-            action = self.model.predict(obs)
+        def predict(self, obs, deterministic=True):
+            action = self.model.predict(obs, deterministic=deterministic)
             return action
 
 
@@ -54,7 +54,7 @@ class BaseMAEnv():
         Sets the models for all agents.
 
         Parameters:
-        - models (dict): A dictionary where keys are the agent identifiers and values are the models to be set.
+        - models (dict): A dictionary where keys are the model identifiers and values are the models to be set.
         """
         for agent_id, agent_data in self.agents.items():
             model_name = agent_data[1]

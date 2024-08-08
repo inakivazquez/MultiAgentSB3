@@ -14,6 +14,7 @@ import os
 import math
 
 from pynput import keyboard
+import random
 
 
 class SoccerEnv(BaseMAEnv):
@@ -70,20 +71,22 @@ class SoccerEnv(BaseMAEnv):
         # and finally the vectors to other agents in the team, the vectors to other agents in the opposite team, and finally the vector to the ball
         n_other_agents = 2*n_team_players - 1
 
-        teams = ['red', 'blue']
-
-        for team in teams:
-            for i in range(n_team_players):
-                self.register_agent(agent_id=f'{team}_{i}',
-                                observation_space=Box(low=np.array([-1, -self.perimeter_side/2,-self.perimeter_side/2, -10, -10] + [-vision_length]*2*(n_other_agents+1)), high=np.array([1, self.perimeter_side/2,self.perimeter_side/2, +10, +10] + [vision_length]*2*(n_other_agents+1)), shape=(5+2*(n_other_agents+1),), dtype=np.float32),
-                                action_space=Box(low=np.array([-1, -1]), high=np.array([1, 1]), shape=(2,), dtype=np.float32),
-                                model_name=f"soccer_{team}"
-                                )
+        for i in range(n_team_players*2): # total players
+            self.register_agent(agent_id=f'{i}',
+                            observation_space=Box(low=np.array([-1, -self.perimeter_side/2,-self.perimeter_side/2, -10, -10] + [-vision_length]*2*(n_other_agents+1)), high=np.array([1, self.perimeter_side/2,self.perimeter_side/2, +10, +10] + [vision_length]*2*(n_other_agents+1)), shape=(5+2*(n_other_agents+1),), dtype=np.float32),
+                            action_space=Box(low=np.array([-1, -1]), high=np.array([1, 1]), shape=(2,), dtype=np.float32),
+                            model_name=f"soccer"
+                            )
        
         self.max_speed = max_speed
         self.players_touched_ball = set()
 
         self.pybullet_text_id = None
+
+        # To be randomly assigned in reset
+        # this is done to shuffle the teams for training in both sides randomly
+        self.red_team_ids = []
+        self.blue_team_ids = []
 
         #self.key_control(self.pybullet_reds_ids[0])
 
@@ -101,6 +104,15 @@ class SoccerEnv(BaseMAEnv):
                 self.players_touched_ball.add(player_touching_ball)
 
     def reset(self, seed=0):
+        # Assign the players to the teams randomly
+        # Shuffle the agents randomly
+        agent_ids = list(self.agents.keys())
+        random.shuffle(agent_ids)
+        # Split the agents into two groups
+        n_agents_per_group = len(agent_ids) // 2
+        self.red_team_ids = agent_ids[:n_agents_per_group]
+        self.blue_team_ids = agent_ids[n_agents_per_group:]
+
         limit_spawn_perimeter = self.perimeter_side / 2 -1
         random_coor = lambda: random.uniform(0, limit_spawn_perimeter)
         for player_id in self.pybullet_reds_ids:
@@ -163,7 +175,7 @@ class SoccerEnv(BaseMAEnv):
 
     def get_observation(self, agent_id):
         # First the team
-        if agent_id.startswith('red'):
+        if agent_id in self.red_team_ids:
             obs = [+1]
         else:
             obs = [-1]
@@ -267,7 +279,7 @@ class SoccerEnv(BaseMAEnv):
                 #rewards[player_id] += 0.1
                 #print(f"Player {player_id} touched the ball")
 
-        self.show_text(f"Red: {rewards['red_0']:.3f}")
+        self.show_text(f"Agent 0: {rewards['0']:.3f}")
         return rewards, terminated, truncated, infos
     
     def player_touching_ball(self):
@@ -342,8 +354,12 @@ class SoccerEnv(BaseMAEnv):
         return self._is_object_out_of_bounds(self.pybullet_ball_id)
 
     def update_reward_team(self, rewards, team, reward):
+        if team == 'red':
+            reward_team_ids = self.red_team_ids
+        else:
+            reward_team_ids = self.blue_team_ids
         for agent_id in self.agents:
-            if agent_id.startswith(team):
+            if agent_id in reward_team_ids:
                 rewards[agent_id] += reward
         return rewards
 
@@ -389,10 +405,12 @@ class SoccerEnv(BaseMAEnv):
         return angle_z
 
     def get_pybullet_id(self, agent_id):
-        if agent_id.startswith('red'):
-            return int(self.pybullet_reds_ids[int(agent_id.split('_')[-1])])
+        if agent_id in self.red_team_ids:
+            index = self.red_team_ids.index(agent_id)
+            return self.pybullet_reds_ids[index]
         else:
-            return int(self.pybullet_blues_ids[int(agent_id.split('_')[-1])])
+            index = self.blue_team_ids.index(agent_id)
+            return self.pybullet_blues_ids[index]
 
     def render(self, mode='human'):
         pass  # Rendering handled in real-time if GUI mode is enabled
