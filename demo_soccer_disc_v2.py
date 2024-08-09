@@ -1,4 +1,4 @@
-from ma_sb3.envs.soccer_v2 import SoccerEnv
+from ma_sb3.envs.soccer_disc_v2 import SoccerEnv
 from ma_sb3 import TimeLimitMAEnv
 
 from stable_baselines3 import PPO, SAC
@@ -14,7 +14,7 @@ if __name__ == "__main__":
     train = False
     load_previous_model = False
 
-    algo = SAC
+    algo = PPO
 
     n_team_players = 2
 
@@ -45,8 +45,8 @@ if __name__ == "__main__":
             for model_name, model in models.items():
                 algo_name = model.__class__.__name__
                 print(f"Training the {model_name} model...")
-                checkpoint_callback = CheckpointCallback(save_freq=10_000, save_path=f"checkpoints/{model_name}{n_team_players}p_{algo_name}")
-                model.learn(total_timesteps=steps_per_iteration, callback=checkpoint_callback, progress_bar=True, reset_num_timesteps=False, tb_log_name=f"{model_name}{n_team_players}p_{algo_name}")
+                checkpoint_callback = CheckpointCallback(save_freq=10_000, save_path=f"checkpoints/{model_name}disc{n_team_players}p_{algo_name}")
+                model.learn(total_timesteps=steps_per_iteration, callback=checkpoint_callback, progress_bar=True, reset_num_timesteps=False, tb_log_name=f"{model_name}disc{n_team_players}p_{algo_name}")
 
         ma_env.close()
 
@@ -57,8 +57,8 @@ if __name__ == "__main__":
     ma_env = SoccerEnv(n_team_players=n_team_players, perimeter_side=10, render=True)
     ma_env = TimeLimitMAEnv(ma_env, max_episode_steps=500)
 
-    #model = algo.load(f"policies/model_soccer_uni_{algo.__name__}")
-    model = algo.load(f"checkpoints/soccer2p_SAC/rl_model_10000_steps.zip")
+    model = algo.load(f"policies/model_soccer_uni_{algo.__name__}")
+    #model = algo.load(f"checkpoints/soccerdisc2p_PPO/rl_model_130000_steps.zip")
 
     models = {'soccer':model}
 

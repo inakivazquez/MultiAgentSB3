@@ -221,15 +221,15 @@ class SoccerEnv(BaseMAEnv):
         goal = self.is_goal()
 
         if player_out_of_bounds:
-            #rewards[player_out_of_bounds] -= 100
+            rewards[player_out_of_bounds] -= 10
             terminated = True
             print(f"Player {player_out_of_bounds} is out of bounds")
         elif goal:
                 if goal == 'red':
                     rewards = self.update_reward_team(rewards, 'red', 100)
-                    #rewards = self.update_reward_team(rewards, 'blue', -50)
+                    rewards = self.update_reward_team(rewards, 'blue', -50)
                 else:
-                    #rewards = self.update_reward_team(rewards, 'red', -50)
+                    rewards = self.update_reward_team(rewards, 'red', -50)
                     rewards = self.update_reward_team(rewards, 'blue', 100)
                 terminated = True
                 print(f"Goal scored by the {goal} team")
@@ -244,12 +244,14 @@ class SoccerEnv(BaseMAEnv):
                 rewards[player_touching_ball] += 0.01 # Possesion reward :-)
             """
             # Ball - Goal proximity reward
+            """
             distance_red_goal = self.distance_to_goal('red')
             distance_blue_goal = self.distance_to_goal('blue')
             proximity_reward_red = 0.1 * (0.5 - distance_red_goal / self.perimeter_side)
             proximity_reward_blue = 0.1 * (0.5 - distance_blue_goal / self.perimeter_side)
             rewards = self.update_reward_team(rewards, 'red', proximity_reward_red)
             rewards = self.update_reward_team(rewards, 'blue', proximity_reward_blue)
+            """
 
             """# Player - Ball proximity reward
             for agent_id in self.agents:
@@ -450,7 +452,7 @@ class SoccerEnv(BaseMAEnv):
         half_width = width / 2
         half_thickness = thickness / 2
         half_height = height / 2
-        gap_size = width * 0.25
+        gap_size = width * 0.50
         segment_length = (width - gap_size) / 2
 
         # Create collision shape for wall segments
@@ -488,19 +490,23 @@ class SoccerEnv(BaseMAEnv):
         # Create walls
         # Long walls
         for i in range(2):
-            p.createMultiBody(baseMass=0,
+            id = p.createMultiBody(baseMass=0,
                             baseCollisionShapeIndex=long_wall_shape,
                             baseVisualShapeIndex=long_wall_visual,
                             basePosition=positions[i],
                             baseOrientation=orientations[i])
-        
+
         # Short walls with gaps
         for i in range(2, 6):
-            p.createMultiBody(baseMass=0,
+            id = p.createMultiBody(baseMass=0,
                             baseCollisionShapeIndex=short_wall_shape,
                             baseVisualShapeIndex=short_wall_visual,
                             basePosition=positions[i],
                             baseOrientation=orientations[i])
+
+    def set_collision_filter(self, object_id, barrier_id):
+        p.setCollisionFilterGroupMask(box_id, -1, object_collision_filter_group, object_collision_filter_mask)
+        p.setCollisionFilterGroupMask(barrier_id, -1, barrier_collision_filter_group, barrier_collision_filter_mask)
 
 
     def show_text(self, text):

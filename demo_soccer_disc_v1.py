@@ -1,4 +1,4 @@
-from ma_sb3.envs.soccer_v1 import SoccerEnv
+from ma_sb3.envs.soccer_disc_v1 import SoccerEnv
 from ma_sb3 import TimeLimitMAEnv
 
 from stable_baselines3 import PPO, SAC
@@ -10,11 +10,11 @@ import time
 if __name__ == "__main__":
 
     train = True
-    #train = False
+    train = False
     load_previous_model = False
 
-    algo_red = SAC
-    algo_blue = SAC
+    algo_red = PPO
+    algo_blue = PPO
 
     n_team_players = 1
 
@@ -40,12 +40,15 @@ if __name__ == "__main__":
         models = {'soccer_red':model_red, 'soccer_blue':model_blue}
         ma_env.set_agent_models(models=models)
 
-        total_timesteps_per_agent = 200_000
+        total_timesteps_per_agent = 500_000
         training_iterations = 5
         steps_per_iteration = total_timesteps_per_agent // training_iterations
+        
+        # Pretraining
+        print("Pretraining the blue model...")
+        model_blue.learn(total_timesteps=steps_per_iteration//2, progress_bar=True, reset_num_timesteps=False, tb_log_name=f"soccer_blue{n_team_players}p_{model_blue.__class__.__name__}")
 
         for i in range(training_iterations):
-            print(f"Training iteration {i}")
             for model_name, model in models.items():
                 algo_name = model.__class__.__name__
                 print(f"Training the {model_name} model...")
