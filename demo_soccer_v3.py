@@ -1,4 +1,4 @@
-from ma_sb3.envs.soccer_v1 import SoccerEnv
+from ma_sb3.envs.soccer_v3 import SoccerEnv
 from ma_sb3 import TimeLimitMAEnv
 
 from stable_baselines3 import PPO, SAC
@@ -11,8 +11,8 @@ import time
 if __name__ == "__main__":
 
     train = True
-    train = False
-    load_previous_model = True
+    #train = False
+    load_previous_model = False
 
     algo_red = SAC
     algo_blue = SAC
@@ -53,7 +53,7 @@ if __name__ == "__main__":
                 #if model_name == 'soccer_red':
                 #if model_name == 'soccer_blue':
                 checkpoint_callback = CheckpointCallback(save_freq=steps_per_iteration, save_path=f"checkpoints/{model_name}{n_team_players}p_{algo_name}")
-                model.learn(total_timesteps=steps_per_iteration, callback=checkpoint_callback, progress_bar=True, reset_num_timesteps=False, tb_log_name=f"{model_name}{n_team_players}p_{algo_name}")
+                model.learn(total_timesteps=steps_per_iteration, callback=checkpoint_callback, progress_bar=True, reset_num_timesteps=False, tb_log_name=f"{model_name}{n_team_players}p_v3_{algo_name}")
 
         ma_env.close()
 
@@ -80,7 +80,7 @@ if __name__ == "__main__":
             for agent_id, agent_obs in obs.items():
                 model_id = 'soccer_red' if agent_id.startswith('red') else 'soccer_blue'
                 actions[agent_id] = models[model_id].predict(agent_obs, deterministic=True)[0]
-            #print("Actions:", actions)
+            print("Actions:", actions)
             obs, rewards, terminated, truncated , _= ma_env.step_all(actions)
 
             #print(", ".join([f"{num:.2f}" for num in obs['red_0']]))

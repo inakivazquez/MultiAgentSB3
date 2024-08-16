@@ -20,7 +20,7 @@ class SoccerEnv(BaseMAEnv):
 
     SIMULATION_STEP_DELAY = 1. / 240.
 
-    def __init__(self, n_team_players=2, max_speed = 3, perimeter_side = 10, render=False):
+    def __init__(self, n_team_players=2, max_speed = 0.1, perimeter_side = 10, render=False):
         super(SoccerEnv, self).__init__()
         self.render_mode = render
         self.physicsClient = p.connect(p.GUI if render else p.DIRECT)
@@ -55,7 +55,7 @@ class SoccerEnv(BaseMAEnv):
             p.changeDynamics(bodyUniqueId=player_id, mass=1, linkIndex=-1, lateralFriction=1, spinningFriction=10, rollingFriction=10)
             p.setCollisionFilterGroupMask(player_id, -1, 1, 1)
 
-        self.pybullet_ball_id = p.loadURDF("sphere2.urdf", [0, 0, 0.5], useFixedBase=False, globalScaling=0.3)
+        self.pybullet_ball_id = p.loadURDF("soccerball.urdf", [0, 0, 0.5], useFixedBase=False, globalScaling=0.3)
 
         """script_dir = os.path.dirname(__file__)
         goal_path = os.path.join(script_dir, "./meshes/soccer_ball.obj")
@@ -76,9 +76,10 @@ class SoccerEnv(BaseMAEnv):
         vision_length = 20 # Fixed value
 
         # Create the agents
-        # Observation space is the team of the agent (0=red or 1=blue) to know where to score the goal
-        # and position of the agent, and velocity x and y
+        # Observation space is
+        # and position of the agent, and velocity x and y, and the orietation
         # and finally the vectors to other agents in the team, the vectors to other agents in the opposite team, and finally the vector to the ball
+        # and vector from the ball pos to the goal line
         n_other_agents = 2*n_team_players - 1
 
         teams = ['red', 'blue']
@@ -86,13 +87,14 @@ class SoccerEnv(BaseMAEnv):
         for team in teams:
             for i in range(n_team_players):
                 self.register_agent(agent_id=f'{team}_{i}',
-                                observation_space=Box(low=np.array([-1, -self.perimeter_side/2,-self.perimeter_side/2, -10, -10] + [-vision_length]*2*(n_other_agents+1)), high=np.array([1, self.perimeter_side/2,self.perimeter_side/2, +10, +10] + [vision_length]*2*(n_other_agents+1)), shape=(5+2*(n_other_agents+1),), dtype=np.float32),
+                                observation_space=Box(low=np.array([-self.perimeter_side/2,-self.perimeter_side/2, -10, -10, -2*math.pi] + [-vision_length]*2*(n_other_agents+2)), high=np.array([self.perimeter_side/2,self.perimeter_side/2, +10, +10, +2*math.pi] + [vision_length]*2*(n_other_agents+2)), shape=(5+2*(n_other_agents+2),), dtype=np.float32),
                                 action_space=Box(low=np.array([-1, -1]), high=np.array([1, 1]), shape=(2,), dtype=np.float32),
                                 model_name=f"soccer_{team}"
                                 )
        
         self.max_speed = max_speed
         self.players_touched_ball = set()
+        self.red_goal_direction = 'right'
 
         self.pybullet_text_id = None
 
@@ -113,14 +115,20 @@ class SoccerEnv(BaseMAEnv):
                 self.players_touched_ball.add(player_touching_ball)
 
     def reset(self, seed=0):
+
+        self.red_goal_direction = 'right' if random.random() < 0.5 else 'left'
+
         limit_spawn_perimeter = self.perimeter_side / 2 -1
         random_coor = lambda: random.uniform(0, limit_spawn_perimeter)
+
+        direction = 1 if self.red_goal_direction == 'right' else -1
+
         for player_id in self.pybullet_reds_ids:
-            p.resetBasePositionAndOrientation(player_id, [-random_coor(), 0,  0.5], [0, 0, 0, 1])
+            p.resetBasePositionAndOrientation(player_id, [-direction * random_coor(), 0,  0.5], [0, 0, 0, 1])
             p.resetBaseVelocity(player_id, [0, 0, 0], [0, 0, 0])
 
         for player_id in self.pybullet_blues_ids:
-            p.resetBasePositionAndOrientation(player_id, [random_coor(), 0, 0.5], [0, 0, 0, 1])
+            p.resetBasePositionAndOrientation(player_id, [direction * random_coor(), 0, 0.5], [0, 0, 0, 1])
             p.resetBaseVelocity(player_id, [0, 0, 0], [0, 0, 0])
 
         p.resetBasePositionAndOrientation(self.pybullet_ball_id, [0,0, 0.5], [0, 0, 0, 1])
@@ -150,14 +158,13 @@ class SoccerEnv(BaseMAEnv):
         # If velocity is greater than max, cancel the force
         if velocity > max:
             # Option 1: Cancel the force
-            #force_x = 0
-            #force_y = 0
+            force_x = 0
+            force_y = 0
 
             # Option 2: Scale the force
-            scaling_factor = (self.max_speed / velocity)**2
-            scaling_factor = 0.1
+            """scaling_factor = self.max_speed / velocity
             force_x = scaling_factor * force_x
-            force_y = scaling_factor * force_y
+            force_y = scaling_factor * force_y"""
 
         """
         # If the player is out of bounds and the force is in outside direction, reset the position
@@ -170,6 +177,7 @@ class SoccerEnv(BaseMAEnv):
             pos[2] = 0.5
             p.resetBasePositionAndOrientation(pybullet_object_id, pos, ori)
         """
+
         self.move(pybullet_object_id, force_x, force_y)
 
     def get_oriented_distance_vector(self, object_1_id, object_2_id):
@@ -192,11 +200,7 @@ class SoccerEnv(BaseMAEnv):
         return relative_position_base_frame
 
     def get_observation(self, agent_id):
-        # First the team
-        if agent_id.startswith('red'):
-            obs = [+1]
-        else:
-            obs = [-1]
+        obs = np.array([])
 
         # Now my position
         my_pos = self.get_position(agent_id) # My position
@@ -210,6 +214,10 @@ class SoccerEnv(BaseMAEnv):
         # Now my velocity
         my_velocity, _ = p.getBaseVelocity(my_pybullet_id)
         obs = np.append(obs, my_velocity[:2])
+
+        # Now my angle
+        angle = self.get_orientation(my_pybullet_id)
+        obs = np.append(obs, angle)
 
         # Now the other players, first my teammates
         my_team_vectors = []
@@ -235,6 +243,23 @@ class SoccerEnv(BaseMAEnv):
             time.sleep(20)
         """
 
+        # And finally vector from the ball pos to the goal line
+
+        if agent_id.startswith('red'):
+            if self.red_goal_direction == 'right':
+                goal_line = self.perimeter_side / 2
+            else: 
+                goal_line = -self.perimeter_side / 2
+        elif agent_id.startswith('blue'):
+            if self.red_goal_direction == 'right':
+                goal_line = -self.perimeter_side / 2
+            else: 
+                goal_line = self.perimeter_side / 2
+
+        goal_line_vector = np.array([goal_line, 0]) - ball_pos
+
+        obs = np.append(obs, goal_line_vector)
+
         return obs
 
     def get_env_state_results(self):
@@ -259,8 +284,8 @@ class SoccerEnv(BaseMAEnv):
                     rewards = self.update_reward_team(rewards, 'red', 100)
                     #rewards = self.update_reward_team(rewards, 'blue', -50)
                 else:
-                    rewards = self.update_reward_team(rewards, 'red', -50)
-                    #rewards = self.update_reward_team(rewards, 'blue', 100)
+                    rewards = self.update_reward_team(rewards, 'blue', 100)
+                    #rewards = self.update_reward_team(rewards, 'red', -50)
                 terminated = True
                 print(f"Goal scored by the {goal} team")
         elif self.is_ball_out_of_bounds(): # We must check this after the goal check, becaouse goal is out of bounds
@@ -272,6 +297,7 @@ class SoccerEnv(BaseMAEnv):
             player_touching_ball = self.player_touching_ball()
             if player_touching_ball:
                 rewards[player_touching_ball] += 0.1 # Possesion reward :-)
+                print(f"Player {player_touching_ball} kicked the ball")
             
             # Ball - Goal proximity reward
             """
@@ -299,7 +325,7 @@ class SoccerEnv(BaseMAEnv):
                 #rewards[player_id] += 0.1
                 #print(f"Player {player_id} touched the ball")
 
-        self.show_text(f"Red: {rewards['red_0']:.3f}")
+        #self.show_text(f"Red: {rewards['red_0']:.3f}")
         return rewards, terminated, truncated, infos
     
     def player_touching_ball(self):
@@ -307,16 +333,6 @@ class SoccerEnv(BaseMAEnv):
             if p.getContactPoints(self.get_pybullet_id(agent_id), self.pybullet_ball_id):
                 return agent_id
         return None
-    
-    def distance_to_goal(self, goal_line):
-        ball_position = p.getBasePositionAndOrientation(self.pybullet_ball_id)[0][:2]
-        if goal_line == 'red':
-            goal_line_position = [self.perimeter_side / 2, 0]
-        else:
-            goal_line_position = [-self.perimeter_side / 2, 0]
-
-        return np.linalg.norm(np.array(goal_line_position) - np.array(ball_position))
-    
 
     def kick_ball(self, agent_id):
         # Get the position of the agent and the ball
@@ -358,13 +374,19 @@ class SoccerEnv(BaseMAEnv):
         left_goal_x = -length / 2
         if (ball_x + ball_radius < left_goal_x + thickness and
             -segment_length / 2 < ball_y < segment_length / 2):
-            return 'blue'
+            if self.red_goal_direction == 'left':
+                return 'red'
+            else:
+                return 'blue'
 
         # Check if the ball is completely within the right goal gap
         right_goal_x = length / 2
         if (ball_x - ball_radius > right_goal_x - thickness and
             -segment_length / 2 < ball_y < segment_length / 2):
-            return 'red'
+            if self.red_goal_direction == 'right':
+                return 'red'
+            else:
+                return 'blue'
         
         # No goal detected
         return False
