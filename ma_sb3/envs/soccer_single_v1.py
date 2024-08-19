@@ -102,13 +102,18 @@ class SoccerSingleEnv(BaseMAEnv):
     def reset(self, seed=0):
 
         limit_spawn_perimeter = self.perimeter_side / 2 -1
-        random_coor = lambda: random.uniform(-limit_spawn_perimeter, limit_spawn_perimeter)
+        random_coor_x = lambda: random.uniform(-limit_spawn_perimeter, limit_spawn_perimeter)
+        # easy x
+        random_coor_x = lambda: random.uniform(0, limit_spawn_perimeter)
+        random_coor_y = lambda: random.uniform(-limit_spawn_perimeter/2, limit_spawn_perimeter/2)
 
         for player_id in self.pybullet_player_ids:
-            p.resetBasePositionAndOrientation(player_id, [random_coor(), random_coor() / 2,  0.5], [0, 0, 0, 1])
+            p.resetBasePositionAndOrientation(player_id, [random_coor_x(), random_coor_y(),  0.5], [0, 0, 0, 1])
             p.resetBaseVelocity(player_id, [0, 0, 0], [0, 0, 0])
 
         ball_x = random.uniform(-self.perimeter_side / 2 + 1, self.perimeter_side / 2 - 1)
+        # easier x
+        ball_x = random.uniform(self.perimeter_side / 2 - 4, self.perimeter_side / 2 - 1)
         ball_y = random.uniform(-self.perimeter_side / 4 + 1, self.perimeter_side / 4 - 1)
         
         p.resetBasePositionAndOrientation(self.pybullet_ball_id, [ball_x,ball_y, 0.5], [0, 0, 0, 1])
@@ -285,6 +290,11 @@ class SoccerSingleEnv(BaseMAEnv):
                 #print(f"Player {player_id} touched the ball")
 
         #self.show_text(f"Red: {rewards['red_0']:.3f}")
+
+        # Time penalty
+        for r in rewards:
+            rewards[r] -= 0.005
+
         return rewards, terminated, truncated, infos
     
     def player_touching_ball(self):

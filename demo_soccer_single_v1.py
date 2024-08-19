@@ -11,10 +11,10 @@ import time
 if __name__ == "__main__":
 
     train = True
-    train = False
-    load_previous_model = False
+    #train = False
+    load_previous_model = True
 
-    algo = PPO
+    algo = SAC
 
     n_team_players = 1
 
@@ -26,11 +26,10 @@ if __name__ == "__main__":
 
         env_red = agents_envs['red_0']
 
-        #policy_kwargs = dict(net_arch=[32, 32])
-        hyperparams = {
-            "batch_size": 128,
-            "gamma": 0.9395049487155621,
-            "learning_rate": 0.0002989564293259529,
+        """hyperparams = {
+            "batch_size": 256,
+            "gamma": 0.9556,
+            "learning_rate": 0.0005,
             "policy_kwargs": {
                 "net_arch": [
                     32,
@@ -38,7 +37,8 @@ if __name__ == "__main__":
                 ]
             },
             "use_sde": False
-        }
+        }"""
+        hyperparams = {}
 
 
         if load_previous_model:
@@ -49,7 +49,7 @@ if __name__ == "__main__":
         models = {'soccer_single':model}
         ma_env.set_agent_models(models=models)
 
-        total_timesteps_per_agent = 1_000_000
+        total_timesteps_per_agent = 100_000
         training_iterations = 1
         steps_per_iteration = total_timesteps_per_agent // training_iterations
 

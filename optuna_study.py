@@ -40,7 +40,7 @@ def objective(trial: optuna.Trial):
 
     try:
         model.learn(total_timesteps=n_steps, progress_bar=True)
-        model.save(f"optuna/models/trial_{trial.number}.zip")
+        model.save(f"{full_study_dir_path}/trial_{trial.number}.zip")
         print()
         print("Evaluating the model...")
         mean_reward, std_reward = evaluate_policy(model, model.get_env(), n_eval_episodes=10)
@@ -73,7 +73,6 @@ def create_study_dir(optuna_dir, study_dir, delete_existing=True):
     os.makedirs(os.path.join(full_study_dir_path, "models"), exist_ok=True)
 
 
-
 # Create environment
 n_team_players = 1
 ma_env = SoccerSingleEnv(n_team_players=n_team_players, perimeter_side=10, render=False)
@@ -82,8 +81,11 @@ ma_env = TimeLimitMAEnv(ma_env, max_episode_steps=1000)
 agents_envs = ma_env.get_agents_envs()
 
 env = agents_envs['red_0']
+storage_file = f"sqlite:///optuna/optuna.db"
+study_name = "soccer_single_time_ppo"
+full_study_dir_path = f"optuna/{study_name}"
 
-study = optuna.create_study(direction='maximize', study_name="soccer_single_ppo")
+study = optuna.create_study(direction='maximize', study_name=study_name, storage=storage_file, load_if_exists=True)
 n_trials = 50
 n_steps = 400_000
 
@@ -93,10 +95,7 @@ study.optimize(objective, n_trials=n_trials)
 env.close()
 
 # Create the study directory if required
-create_study_dir("optuna", study.study_name, delete_existing=True)
-
-full_study_dir_path = f"optuna/{study.study_name}"
-
+create_study_dir("optuna", study_name, delete_existing=True)
 
 best_trial = study.best_trial
 
