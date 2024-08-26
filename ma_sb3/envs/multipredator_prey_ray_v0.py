@@ -12,11 +12,13 @@ import pybullet as p
 import random
 import math
 
+from ma_sb3.raycast import raycast_horizontal_detect
+
 class MultiPredatorPreyMAEnv(BaseMAEnv):
 
     SIMULATION_STEP_DELAY = 1. / 240.
 
-    def __init__(self, n_predators=2, max_speed_predator=3, max_speed_prey = 5, perimeter_side = 10, render=False):
+    def __init__(self, n_predators=2, max_speed_predator=0.1, max_speed_prey = 0.1, perimeter_side = 10, render=False):
         super(MultiPredatorPreyMAEnv, self).__init__()
         self.render_mode = render
         self.physicsClient = p.connect(p.GUI if render else p.DIRECT)
@@ -46,22 +48,25 @@ class MultiPredatorPreyMAEnv(BaseMAEnv):
         self.perimeter_side = perimeter_side
         self.draw_perimeter(self.perimeter_side)
         
-        self.raycast_vision_length = self.perimeter_side
-        self.raycast_lines = []
+        self.raycast_vision_length = self.perimeter_side*2
 
         # Create the agents
-        raycast_len = 3 # Three components per raycast: one-hot for predator or prey and distance
-        self.n_raycasts = 16
+        raycast_len = 4 # Four components per raycast: one-hot for predator or prey or wall and distance
+        self.n_raycasts = 5
+        self.raycast_cover_angle = 2*math.pi/12
+
         for i in range(n_predators):
             self.register_agent(agent_id=f'predator_{i}',
-                            observation_space=Box(low=np.array([-self.perimeter_side/2,-self.perimeter_side/2] + [0,0,-self.raycast_vision_length]*self.n_raycasts), high=np.array([self.perimeter_side/2,self.perimeter_side/2] + [1,1,self.raycast_vision_length]*self.n_raycasts), shape=(2+raycast_len*self.n_raycasts,), dtype=np.float32),
-                            action_space=Box(low=np.array([-10, -10]), high=np.array([10, 10]), shape=(2,), dtype=np.float32),
+                            #observation_space=Box(low=np.array([-self.perimeter_side/2,-self.perimeter_side/2] + [0,0,0,-self.raycast_vision_length]*self.n_raycasts), high=np.array([self.perimeter_side/2,self.perimeter_side/2] + [1,1,1, self.raycast_vision_length]*self.n_raycasts), shape=(2+raycast_len*self.n_raycasts,), dtype=np.float32),
+                            observation_space=Box(low=np.array([0,0,0,-self.raycast_vision_length]*self.n_raycasts), high=np.array([1,1,1, self.raycast_vision_length]*self.n_raycasts), shape=(raycast_len*self.n_raycasts,), dtype=np.float32),
+                            action_space=Box(low=np.array([-math.pi/18, 0]), high=np.array([+math.pi/18, 1]), shape=(2,), dtype=np.float32),
                             model_name='predator'
                             )
 
         self.register_agent(agent_id='prey',
-                        observation_space=Box(low=np.array([-self.perimeter_side/2,-self.perimeter_side/2] + [0,0,-self.raycast_vision_length]*self.n_raycasts), high=np.array([self.perimeter_side/2,self.perimeter_side/2] + [1,1,self.raycast_vision_length]*self.n_raycasts), shape=(2+raycast_len*self.n_raycasts,), dtype=np.float32),
-                        action_space=Box(low=np.array([-10, -10]), high=np.array([10, 10]), shape=(2,), dtype=np.float32),
+                        #observation_space=Box(low=np.array([-self.perimeter_side/2,-self.perimeter_side/2] + [0,0,0,-self.raycast_vision_length]*self.n_raycasts), high=np.array([self.perimeter_side/2,self.perimeter_side/2] + [1,1,1, self.raycast_vision_length]*self.n_raycasts), shape=(2+raycast_len*self.n_raycasts,), dtype=np.float32),
+                        observation_space=Box(low=np.array([0,0,0,-self.raycast_vision_length]*self.n_raycasts), high=np.array([1,1,1, self.raycast_vision_length]*self.n_raycasts), shape=(raycast_len*self.n_raycasts,), dtype=np.float32),
+                        action_space=Box(low=np.array([-math.pi/18, 0]), high=np.array([+math.pi/18, 1]), shape=(2,), dtype=np.float32),
                         model_name='prey'
                         )
         
@@ -74,8 +79,16 @@ class MultiPredatorPreyMAEnv(BaseMAEnv):
             time.sleep(self.SIMULATION_STEP_DELAY)
 
     def sync_wait_for_actions_completion(self, sim_steps=10):
+        self.predators_touching_prey = set()
         for _ in range(sim_steps):
             self.step_simulation()
+            predator_touching_prey = self.get_predators_touching_prey()
+            if predator_touching_prey is not None:
+                self.predators_touching_prey.add(predator_touching_prey)
+
+        # This is the visual optimal point for raycast removal
+        if self.render_mode:
+            p.removeAllUserDebugItems()
         
     def reset(self, seed=0):
         limit_spawn_perimeter = 2
@@ -91,24 +104,42 @@ class MultiPredatorPreyMAEnv(BaseMAEnv):
         return obs, info
 
     def step_agent(self, agent_id, action):
-        force_x = action[0]
-        force_y = action[1]
 
-        if agent_id.startswith('predator'):
-            pybullet_object_id = self.get_pybullet_id(agent_id)
-            max = self.max_speed_predator
-        else:
-            pybullet_object_id = self.pybullet_prey_id
-            max = self.max_speed_prey
+        rotation_offset = action[0]
+        force = action[1]
+
+        pybullet_object_id = self.get_pybullet_id(agent_id)
+
+        # Rotate the player towards the force direction
+        position, _ = p.getBasePositionAndOrientation(pybullet_object_id)
+        #linear_velocity, angular_velocity = p.getBaseVelocity(pybullet_object_id)
+        linear_velocity = angular_velocity = [0,0, 0] # Starting still in next step
+        angle = self.get_orientation(pybullet_object_id)
+        angle += rotation_offset
+        p.resetBasePositionAndOrientation(pybullet_object_id, position, p.getQuaternionFromEuler([0, 0, angle]))
+        p.resetBaseVelocity(pybullet_object_id, linearVelocity=linear_velocity, angularVelocity=angular_velocity)
 
         # Limit the speed
+        max = self.max_speed_predator if agent_id.startswith('predator') else self.max_speed_prey
         velocity, _ = p.getBaseVelocity(pybullet_object_id)
-        if abs(velocity[0]) > max:
-            force_x = 0
-        if abs(velocity[1]) > max:
-            force_y = 0
+        velocity = math.sqrt(velocity[0]**2 + velocity[1]**2)
+        # If velocity is greater than max, cancel the force
+        if velocity > max:
+            force = 0
 
-        self.move(pybullet_object_id, force_x, force_y)
+        self.move(pybullet_object_id, force)
+
+    def move(self, pybullet_object_id, force):
+        factor = 2000
+        force *= factor
+        force = [force, 0, 0]
+        position, orientation = p.getBasePositionAndOrientation(pybullet_object_id)
+        # Convert quaternion to rotation matrix
+        rotation_matrix = np.array(p.getMatrixFromQuaternion(orientation)).reshape(3, 3)
+        # Transform the force vector from local to world coordinates
+        force_world = np.dot(rotation_matrix, force)
+
+        p.applyExternalForce(pybullet_object_id, -1, force_world, position, p.WORLD_FRAME)
 
     def get_oriented_distance_vector(self, object_1_id, object_2_id):
         # Get the base position and orientation of object_1
@@ -129,11 +160,28 @@ class MultiPredatorPreyMAEnv(BaseMAEnv):
         
         return relative_position_base_frame
 
+    def get_orientation(self, pybullet_object_id):
+        # Get the orientation of the object
+        _, orientation = p.getBasePositionAndOrientation(pybullet_object_id)
+        
+        # Convert quaternion to euler angles
+        euler_angles = p.getEulerFromQuaternion(orientation)
+        
+        # Extract the angle around the z-axis
+        # euler_angles returns (roll, pitch, yaw)
+        # yaw is the angle around the z-axis
+        angle_z = euler_angles[2]  # radians
+        
+        return angle_z
+        
     def get_observation(self, agent_id):
+        obs = np.array([])
         my_pos = self.get_position(agent_id)
-        obs = my_pos
-        # self.agents is a dictionary, but according to the spec the order of the agents should be preserved
-        raycast_data = self.raycast_detect_objects(my_pos)
+        #obs = np.append(obs, my_pos)
+
+        my_angle = self.get_orientation(self.get_pybullet_id(agent_id))
+
+        raycast_data = self.raycast_detect_objects(my_pos, my_angle, covering_angle=self.raycast_cover_angle)
         obs = np.append(obs, raycast_data)
         return obs
 
@@ -142,10 +190,14 @@ class MultiPredatorPreyMAEnv(BaseMAEnv):
         rewards = {}
         infos = {}   
 
-        if self.is_any_predator_touching_prey():
+        #if self.is_any_predator_touching_prey():
+        predator_touching_prey = self.predators_touching_prey.pop() if len(self.predators_touching_prey) > 0 else None
+
+        if predator_touching_prey:
             # Predators win
             terminated = True
-            rewards.update(self.reward_predators(+10))
+            rewards.update(self.reward_predators(+5))
+            rewards[predator_touching_prey] += 10 # Predator that touched the prey gets extra reward
             rewards['prey'] = -10
             print("Captured!")
         else:        
@@ -165,17 +217,19 @@ class MultiPredatorPreyMAEnv(BaseMAEnv):
                 rewards.update(self.reward_predators(+10)) # Predator wins
             else:
                 # prey wins +1 per time step, predator loses 1
-                rewards.update(self.reward_predators(-0.1))
+                #rewards.update(self.reward_predators(-0.1))
+                rewards.update(self.reward_predators(0))
                 rewards['prey'] = 0.1
                 terminated = False
 
         return rewards, terminated, truncated, infos
     
-    def is_any_predator_touching_prey(self):
-        for predator_id in self.pybullet_predators_ids:
-            if p.getContactPoints(predator_id, self.pybullet_prey_id):
-                return True
-        return False
+    def get_predators_touching_prey(self):
+        for agent_id in self.agents:
+            if agent_id.startswith('predator'):
+                if p.getContactPoints(self.get_pybullet_id(agent_id), self.pybullet_prey_id):
+                    return agent_id
+        return None
     
     def is_any_predator_out_of_bounds(self):
         limit_perimeter = self.perimeter_side / 2
@@ -201,12 +255,6 @@ class MultiPredatorPreyMAEnv(BaseMAEnv):
 
         pos,_ = p.getBasePositionAndOrientation(pybullet_id)
         return np.array(pos[:2])
-
-    def move(self, pybullet_object_id, force_x, force_y):
-        factor = 100
-        force_x *= factor
-        force_y *= factor
-        p.applyExternalForce(pybullet_object_id, -1, [force_x, force_y, 0], [0, 0, 0], p.LINK_FRAME)
 
     def get_pybullet_id(self, agent_id):
         if agent_id.startswith('predator'):
@@ -291,55 +339,31 @@ class MultiPredatorPreyMAEnv(BaseMAEnv):
         ]
 
         # Create walls
+        self.pybullet_wall_ids = []
         for i in range(4):
-            p.createMultiBody(baseMass=0,
+            id = p.createMultiBody(baseMass=0,
                             baseCollisionShapeIndex=wall_shape,
                             baseVisualShapeIndex=wall_visual,
                             basePosition=positions[i],
                             baseOrientation=orientations[i])
+            self.pybullet_wall_ids.append(id)
 
 
-    def raycast_detect_objects(self, pos_x_y):
-        """if self.render_mode:
-            for line_id in self.raycast_lines:
-                p.removeUserDebugItem(line_id)
-            self.raycast_lines = []"""
-        # Generate vectors
-        z_height = 0.1
-        vectors = []
-        angle_increment = 2 * math.pi / self.n_raycasts
-        for i in range(self.n_raycasts):
-            angle = i * angle_increment
-            x = self.raycast_vision_length * math.cos(angle)
-            y = self.raycast_vision_length * math.sin(angle)
-            vectors.append((x, y, z_height))
-
-        start_positions = [(pos_x_y[0], pos_x_y[1], z_height)] * len(vectors)  # Starting from origin for each vector
-        end_positions = vectors  # End positions are the generated vectors
-
-        # Perform ray tests
-        ray_results = p.rayTestBatch(start_positions, end_positions)
-
+    def raycast_detect_objects(self, source_pos_x_y, source_angle_z, covering_angle=2*math.pi):
+        source_pos = np.array([source_pos_x_y[0], source_pos_x_y[1], 0.5])
+        detections = raycast_horizontal_detect(source_pos, source_angle_z, n_raycasts=self.n_raycasts, covering_angle=covering_angle, vision_length=self.raycast_vision_length, draw_lines=self.render_mode)
         results = np.array([])
-        for start, end, result in zip(start_positions, end_positions, ray_results):
-            object_id = result[0]
-            hit_position = result[3]
-            distance = math.sqrt((hit_position[0] - start[0])**2 + 
-                                 (hit_position[1] - start[1])**2 + 
-                                 (hit_position[2] - start[2])**2)
 
+        for object_id, distance in detections:
             if object_id in self.pybullet_predators_ids:
-                one_hot_type = [1, 0]  # Type 0 (predator)
+                one_hot_type = [1, 0, 0]  # Type 0 (predator)
             elif object_id == self.pybullet_prey_id:
-                one_hot_type = [0, 1]  # Type 1 (prey)
+                one_hot_type = [0, 1, 0]  # Type 1 (prey)
+            elif object_id in self.pybullet_wall_ids:
+                one_hot_type = [0, 0, 1] # Type 2 (wall)
             else:
-                one_hot_type = [0, 0]
-            
-            results = np.append(results, one_hot_type + [distance])
+                one_hot_type = [0, 0, 0]
 
-            # Draw debug line for each ray
-            """if self.render_mode:
-                line_id = p.addUserDebugLine(start, end, lineColorRGB=[1, 0, 0], lifeTime=0)  # Red lines
-                self.raycast_lines.append(line_id)
-            """
+            results = np.append(results, one_hot_type + [distance])
         return results
+
