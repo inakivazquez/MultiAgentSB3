@@ -1,4 +1,4 @@
-from ma_sb3.envs.multipredator_prey_ray_v0 import MultiPredatorPreyMAEnv
+from ma_sb3.envs.multipredator_prey_v1 import MultiPredatorPreyMAEnv
 from ma_sb3 import TimeLimitMAEnv
 
 from gymnasium.wrappers.time_limit import TimeLimit
@@ -12,7 +12,7 @@ if __name__ == "__main__":
 
     train = True
     #train = False
-    load_previous_predator = False
+    load_previous_predator = True
     load_previous_prey = True
 
     predator_algo = PPO
@@ -20,8 +20,8 @@ if __name__ == "__main__":
 
     n_predators = 1
 
-    predator_model_path = f"policies/model_multi_ray_predator_{n_predators}preds_{predator_algo.__name__}"
-    prey_model_path = f"policies/model_multi_ray_prey_{n_predators}preds_{prey_algo.__name__}"
+    predator_model_path = f"policies/model_multipredator_{n_predators}preds_{predator_algo.__name__}"
+    prey_model_path = f"policies/model_multiprey_{n_predators}preds_{prey_algo.__name__}"
 
     if train:
         ma_env = MultiPredatorPreyMAEnv(n_predators=n_predators, perimeter_side=10, render=False)
@@ -49,7 +49,7 @@ if __name__ == "__main__":
         models = {'predator':model_predator, 'prey': model_prey}
         ma_env.set_agent_models(models=models)
 
-        total_timesteps_per_agent = 300_000
+        total_timesteps_per_agent = 100_000
         training_iterations = 1
         steps_per_iteration = total_timesteps_per_agent // training_iterations
 
@@ -60,7 +60,7 @@ if __name__ == "__main__":
             for model_name, model in models.items():
                 if model_name in models_to_train:
                     algo_name = model.__class__.__name__
-                    model.learn(total_timesteps=steps_per_iteration, progress_bar=True, reset_num_timesteps=False, tb_log_name=f"ray_{model_name}_{n_predators}preds_{algo_name}")
+                    model.learn(total_timesteps=steps_per_iteration, progress_bar=True, reset_num_timesteps=False, tb_log_name=f"{model_name}_{n_predators}preds_{algo_name}")
 
         ma_env.close()
 
