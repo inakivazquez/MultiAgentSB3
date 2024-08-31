@@ -18,6 +18,7 @@ def ma_train(ma_env, model_algo_map, models_to_train='all', models_to_load={},
 
         agent_env_map = {model_name: env for env, model_name in ma_env.agents.values()}
 
+        # Create agent models, either from scratch or load pre-trained models
         models = {}
         for model_name, env in agent_env_map.items():
             algo = model_algo_map[model_name][0]
@@ -72,17 +73,23 @@ def ma_evaluate(ma_env, models, total_episodes=100):
                 model_id = agentid_modelname_map[agent_id]
                 actions[agent_id] = models[model_id].predict(agent_obs)[0]
             obs, rewards, terminated, truncated, infos = ma_env.step_all(actions)
+            # Update current episode rewards for each agent
             episode_rewards = {agent_id: episode_rewards[agent_id] + rewards[agent_id] for agent_id in rewards.keys()}
         
-        if terminated:
+        if terminated or truncated:
+            # Add the episode rewards to the list of rewards for each agent
             for agent_id, reward in episode_rewards.items():
                 list_episodes_rewards[agent_id].append(reward)
     
+    # Calculate average reward per agent
     average_reward_agent = {agent_id: sum(rewards)/total_episodes for agent_id, rewards in list_episodes_rewards.items()}
+    
+    # Calculate average reward per model
     average_reward_per_model = {model_name: 0 for model_name in set(agentid_modelname_map.values())}
-
+    # First aggregate the rewards per model
     for agent_id, model_name in agentid_modelname_map.items():
         average_reward_per_model[model_name] += average_reward_agent[agent_id]
+    # Then divide by the number of agents per model
     for model_name in average_reward_per_model.keys():
         average_reward_per_model[model_name] /= len([agent_id for agent_id in agentid_modelname_map if agentid_modelname_map[agent_id] == model_name])
 

@@ -6,15 +6,18 @@ from gymnasium.wrappers.time_limit import TimeLimit
 
 from stable_baselines3 import PPO, SAC
 import pybullet as p
+import logging
 
 
 # Example of running the environment
 if __name__ == "__main__":
 
+    logging.basicConfig(level=logging.WARNING, format='%(levelname)s: %(message)s')
+
     train = True
     #train = False
-    load_previous_predator = True
-    load_previous_prey = True
+    load_previous_predator = False
+    load_previous_prey = False
 
     n_predators = 3
 
@@ -26,8 +29,10 @@ if __name__ == "__main__":
     predator_model_path = f"policies/model_multipredator_{n_predators}preds_{predator_algo.__name__}"
     prey_model_path = f"policies/model_multiprey_{n_predators}preds_{prey_algo.__name__}"
 
+    env_params = {'n_predators': n_predators, 'perimeter_side': 10, 'reward_all_predators': 10, 'reward_catching_predator': 0}
+
     if train:
-        ma_env = MultiPredatorPreyMAEnv(n_predators=n_predators, perimeter_side=10, render=False)
+        ma_env = MultiPredatorPreyMAEnv(**env_params, render=False)
         ma_env = TimeLimitMAEnv(ma_env, max_episode_steps=250)
 
         model_algo_map = {'predator': (predator_algo, predator_algo_params), 'prey': (prey_algo, prey_algo_params)}
@@ -40,7 +45,7 @@ if __name__ == "__main__":
 
         trained_models = ma_train(ma_env, model_algo_map=model_algo_map,
                  models_to_train='all', models_to_load=models_to_load,
-                 total_timesteps_per_model=60_000, training_iterations=2,
+                 total_timesteps_per_model=10_000, training_iterations=5,
                  tb_log_suffix=f"{n_predators}preds")
 
         ma_env.close()
@@ -49,9 +54,10 @@ if __name__ == "__main__":
         trained_models['prey'].save(prey_model_path)
         
     # TESTING SECTION
+    render = False
     record_video_file = None
     #record_video_file = "3preds_1prey.mp4"
-    ma_env = MultiPredatorPreyMAEnv(n_predators=n_predators, perimeter_side=10, render=False, record_video_file=record_video_file)
+    ma_env = MultiPredatorPreyMAEnv(**env_params, render=render, record_video_file=record_video_file)
     ma_env = TimeLimitMAEnv(ma_env, max_episode_steps=250)
 
     model_predator = predator_algo.load(predator_model_path)

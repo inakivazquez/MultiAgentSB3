@@ -13,11 +13,14 @@ import random
 import os
 import math
 
+import logging
+
+logger = logging.getLogger(__name__)
 class MultiPredatorPreyMAEnv(BaseMAEnv):
 
     SIMULATION_STEP_DELAY = 1. / 240.
 
-    def __init__(self, n_predators=2, max_speed_predator = 2, max_speed_prey = 4, perimeter_side = 10, render=False, record_video_file=None):
+    def __init__(self, n_predators=2, max_speed_predator = 2, max_speed_prey = 4, reward_all_predators = 10, reward_catching_predator = 5, perimeter_side = 10, render=False, record_video_file=None):
         super(MultiPredatorPreyMAEnv, self).__init__()
         self.render_mode = render
         # For video recording
@@ -53,7 +56,6 @@ class MultiPredatorPreyMAEnv(BaseMAEnv):
         vision_length = 20 # Fixed value
 
         # Create the agents
-        obs_space_others_len = 2 * (n_predators - 1) + 2 # x,y per other predator + x,y of prey
         for i in range(n_predators):
             self.register_agent(agent_id=f'predator_{i}',
                             observation_space=Box(low=np.array([-2*math.pi, -self.perimeter_side/2,-self.perimeter_side/2] + [-vision_length]*2*(n_predators-1+1)), high=np.array([+2*math.pi, self.perimeter_side/2,self.perimeter_side/2] + [vision_length]*2*(n_predators-1+1)), shape=(3+2*(n_predators-1+1),), dtype=np.float32),
@@ -61,7 +63,6 @@ class MultiPredatorPreyMAEnv(BaseMAEnv):
                             model_name='predator'
                             )
 
-        obs_space_others_len = 2 * n_predators # x,y per each predator
         self.register_agent(agent_id='prey',
                         observation_space=Box(low=np.array([-2*math.pi, -self.perimeter_side/2,-self.perimeter_side/2] + [-vision_length]*2*n_predators), high=np.array([+2*math.pi, self.perimeter_side/2,self.perimeter_side/2] + [vision_length]*2*n_predators), shape=(3+2*n_predators,), dtype=np.float32),
                         action_space=Box(low=np.array([-math.pi/18, -1]), high=np.array([+math.pi/18, 1]), shape=(2,), dtype=np.float32),
@@ -70,6 +71,8 @@ class MultiPredatorPreyMAEnv(BaseMAEnv):
         
         self.max_speed_predator = max_speed_predator
         self.max_speed_prey = max_speed_prey
+        self.reward_all_predators = reward_all_predators
+        self.reward_catching_predator = reward_catching_predator
 
     def step_simulation(self):
         p.stepSimulation()
@@ -202,10 +205,10 @@ class MultiPredatorPreyMAEnv(BaseMAEnv):
         if predator_touching_prey is not None:
             # Predators win
             terminated = True
-            rewards.update(self.reward_predators(+10))
-            rewards[predator_touching_prey] += 5 # Predator that touched the prey gets extra reward
+            rewards.update(self.reward_predators(self.reward_all_predators))
+            rewards[predator_touching_prey] += self.reward_catching_predator # Predator that touched the prey gets extra reward
             rewards['prey'] = -10
-            print(f"Captured by {predator_touching_prey}")
+            logger.info(f"Captured by {predator_touching_prey}")
             infos['winner'] = "predator"
         else:        
             predator_out = self.predator_out_of_bounds()
@@ -216,16 +219,15 @@ class MultiPredatorPreyMAEnv(BaseMAEnv):
                 terminated = True
                 rewards.update(self.reward_predators(0)) # Initialized to 0
                 rewards[predator_out] = -100 # This predator is penalized
-                print("Predator: Out of bounds!")
-                rewards['prey'] = 10 # Prey wins
+                logger.info("Predator: Out of bounds!")
+                rewards['prey'] = +10 # Prey wins
             elif prey_out:
                 terminated = True
                 rewards['prey'] = -100
-                print("Prey: Out of bounds!")
-                rewards.update(self.reward_predators(+10)) # Predators wins
+                logger.info("Prey: Out of bounds!")
+                rewards.update(self.reward_predators(self.reward_all_predators)) # Predators wins
             else:
-                # prey wins +1 per time step, predator loses 1?
-                #rewards.update(self.reward_predators(-0.1))
+                # prey wins some per time step
                 rewards.update(self.reward_predators(0)) # Set to 0
                 rewards['prey'] = 0.1
                 terminated = False
