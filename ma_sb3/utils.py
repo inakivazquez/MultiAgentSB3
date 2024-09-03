@@ -1,4 +1,6 @@
 from ma_sb3 import BaseMAEnv, AgentMAEnv
+from copy import deepcopy
+    
 
 def ma_train(ma_env, model_algo_map, models_to_train='all', models_to_load={},
              total_timesteps_per_model=10_000, training_iterations=2, tb_log_suffix=""):        
@@ -37,12 +39,64 @@ def ma_train(ma_env, model_algo_map, models_to_train='all', models_to_load={},
             models_to_train = list(models.keys())
 
         for i in range(training_iterations):
-            print(f"Training iteration {i}")
+            print(f"Training iteration {i} of {training_iterations}...")
             for model_name, model in models.items():
                 if model_name in models_to_train:
                     algo_name = model.__class__.__name__
                     print(f"Training {model_name} with {algo_name}...")
                     model.learn(total_timesteps=steps_per_iteration, progress_bar=True, reset_num_timesteps=False, tb_log_name=f"{model_name}_{algo_name}_{tb_log_suffix}")
+        return models
+
+
+def ma_train2(ma_env, model_algo_map, models_to_train='all', models_to_load={},
+             total_timesteps_per_model=10_000, training_iterations=2, tb_log_suffix=""):        
+        """
+        Trains multiple agents in a multi-agent environment using different models and algorithms.
+        Args:
+            ma_env (MultiAgentEnv): The multi-agent environment.
+            model_algo_map (dict): A dictionary mapping agent names to tuples of (algorithm, algorithm_params).
+            models_to_train (list or str, optional): The list of model names to train. Defaults to 'all'.
+            models_to_load (dict, optional): A dictionary mapping model names to pre-trained models to load based on their path. Defaults to {}.
+            total_timesteps_per_model (int, optional): The total number of timesteps to train each model. Defaults to 10_000.
+            training_iterations (int, optional): The number of training iterations. Defaults to 2.
+            tb_log_suffix (str, optional): The suffix to append to the TensorBoard log name. Defaults to "".
+        Returns:
+            dict: A dictionary mapping agent names to trained models.
+        """
+
+        agent_env_map = {model_name: env for env, model_name in ma_env.agents.values()}
+
+        # Create agent models, either from scratch or load pre-trained models
+        models = {}
+        for model_name, env in agent_env_map.items():
+            algo = model_algo_map[model_name][0]
+            algo_params = model_algo_map[model_name][1]
+            if models_to_load is not None and model_name in models_to_load:
+                model = algo.load(models_to_load[model_name], env=env, **algo_params)
+            else:
+                model = algo(env=env, **algo_params)
+            models[model_name] = model
+
+        previous_models = deepcopy(models)
+        ma_env.set_agent_models(models=previous_models)
+
+        steps_per_iteration = total_timesteps_per_model // training_iterations
+
+        if models_to_train == 'all':
+            models_to_train = list(models.keys())
+
+        for i in range(training_iterations):
+            print(f"Training iteration {i} of {training_iterations}...")
+            for model_name, model in models.items():
+                if model_name in models_to_train:
+                    algo_name = model.__class__.__name__
+                    print(f"Training {model_name} with {algo_name}...")
+                    model.learn(total_timesteps=steps_per_iteration, progress_bar=True, reset_num_timesteps=False, tb_log_name=f"{model_name}_{algo_name}_{tb_log_suffix}")
+                    ma_env.set_agent_models(models=previous_models)
+
+            previous_models = deepcopy(models)
+            ma_env.set_agent_models(models=previous_models)
+
         return models
 
 

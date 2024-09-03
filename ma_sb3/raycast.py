@@ -3,6 +3,19 @@ import pybullet as p
 import numpy as np
 
 def raycast_horizontal_detect(source_pos, source_angle_z, n_raycasts=7, covering_angle=2*math.pi, vision_length=10, draw_lines=True):
+    """
+    Performs horizontal raycasting from a given source position and angle.
+    Args:
+        source_pos (tuple): The source position of the raycasts in the form (x, y, z).
+        source_angle_z (float): The starting angle in radians representing the direction of the first raycast.
+        n_raycasts (int, optional): The number of raycasts to perform. Defaults to 7.
+        covering_angle (float, optional): The angle in radians representing the range of the raycasts. Defaults to 2*math.pi (360 degrees).
+        vision_length (float, optional): The length of the raycasts. Defaults to 10.
+        draw_lines (bool, optional): Whether to draw debug lines for each raycast. Defaults to True.
+    Returns:
+        numpy.ndarray: An array containing the object IDs and distances of the raycast hits.
+            Each row represents a raycast, with the first column being the object ID and the second column being the distance.
+    """
 
     # Generate vectors
     vectors = []

@@ -16,18 +16,19 @@ if __name__ == "__main__":
 
     train = True
     #train = False
-    load_previous_predator = False
-    load_previous_prey = False
+    load_previous_predator = True
+    load_previous_prey = True
 
     n_predators = 3
+    experiment_name = "dense"
 
     predator_algo = PPO
     prey_algo = PPO
     predator_algo_params = {'policy': "MlpPolicy", 'verbose': 1, 'tensorboard_log': "./logs"}
     prey_algo_params = {'policy': "MlpPolicy", 'verbose': 1, 'tensorboard_log': "./logs"}
 
-    predator_model_path = f"policies/model_multipredator_{n_predators}preds_{predator_algo.__name__}"
-    prey_model_path = f"policies/model_multiprey_{n_predators}preds_{prey_algo.__name__}"
+    predator_model_path = f"policies/model_multipredator_{n_predators}preds_{predator_algo.__name__}_{experiment_name}"
+    prey_model_path = f"policies/model_multiprey_{n_predators}preds_{prey_algo.__name__}_{experiment_name}"
 
     env_params = {'n_predators': n_predators, 'perimeter_side': 10, 'reward_all_predators': 10, 'reward_catching_predator': 0}
 
@@ -45,8 +46,8 @@ if __name__ == "__main__":
 
         trained_models = ma_train(ma_env, model_algo_map=model_algo_map,
                  models_to_train='all', models_to_load=models_to_load,
-                 total_timesteps_per_model=10_000, training_iterations=5,
-                 tb_log_suffix=f"{n_predators}preds")
+                 total_timesteps_per_model=1_000_000, training_iterations=100,
+                 tb_log_suffix=f"{n_predators}preds_{experiment_name}")
 
         ma_env.close()
 
@@ -54,7 +55,7 @@ if __name__ == "__main__":
         trained_models['prey'].save(prey_model_path)
         
     # TESTING SECTION
-    render = False
+    render = True
     record_video_file = None
     #record_video_file = "3preds_1prey.mp4"
     ma_env = MultiPredatorPreyMAEnv(**env_params, render=render, record_video_file=record_video_file)
