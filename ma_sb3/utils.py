@@ -1,8 +1,11 @@
 from ma_sb3 import BaseMAEnv, AgentMAEnv
-from copy import deepcopy
+import tempfile
+import os
+import time
+
     
 
-def ma_train(ma_env, model_algo_map, models_to_train='all', models_to_load={},
+def ma_train(ma_env, model_algo_map, models_to_train='all', models_to_load=None,
              total_timesteps_per_model=10_000, training_iterations=2, tb_log_suffix=""):        
         """
         Trains multiple agents in a multi-agent environment using different models and algorithms.
@@ -10,7 +13,7 @@ def ma_train(ma_env, model_algo_map, models_to_train='all', models_to_load={},
             ma_env (MultiAgentEnv): The multi-agent environment.
             model_algo_map (dict): A dictionary mapping agent names to tuples of (algorithm, algorithm_params).
             models_to_train (list or str, optional): The list of model names to train. Defaults to 'all'.
-            models_to_load (dict, optional): A dictionary mapping model names to pre-trained models to load based on their path. Defaults to {}.
+            models_to_load (dict, optional): A dictionary mapping model names to pre-trained models to load based on their path. Defaults to None.
             total_timesteps_per_model (int, optional): The total number of timesteps to train each model. Defaults to 10_000.
             training_iterations (int, optional): The number of training iterations. Defaults to 2.
             tb_log_suffix (str, optional): The suffix to append to the TensorBoard log name. Defaults to "".
@@ -33,22 +36,67 @@ def ma_train(ma_env, model_algo_map, models_to_train='all', models_to_load={},
 
         ma_env.set_agent_models(models=models)
 
+        if models_to_load is None or len(models_to_load) == 0:
+            reset_timesteps = True
+        else:
+            reset_timesteps = False
+
+        print(reset_timesteps)
+
         steps_per_iteration = total_timesteps_per_model // training_iterations
 
         if models_to_train == 'all':
             models_to_train = list(models.keys())
 
         for i in range(training_iterations):
-            print(f"Training iteration {i} of {training_iterations}...")
+            print(f"Training iteration {i+1} of {training_iterations}...")
             for model_name, model in models.items():
                 if model_name in models_to_train:
                     algo_name = model.__class__.__name__
                     print(f"Training {model_name} with {algo_name}...")
-                    model.learn(total_timesteps=steps_per_iteration, progress_bar=True, reset_num_timesteps=False, tb_log_name=f"{model_name}_{algo_name}_{tb_log_suffix}")
+                    model.learn(total_timesteps=steps_per_iteration, progress_bar=True, reset_num_timesteps=reset_timesteps, tb_log_name=f"{model_name}_{algo_name}_{tb_log_suffix}")
         return models
 
+def create_temp_model_filenames(models):
+    temp_model_files = {}
+    for model_name, model in models.items():
+        temp_file = tempfile.NamedTemporaryFile(mode='w+b', delete=True)
+        temp_model_files[model_name] = temp_file.name
+    return temp_model_files
 
-def ma_train2(ma_env, model_algo_map, models_to_train='all', models_to_load={},
+def save_temp_model(model, model_name, temp_model_filenames):
+    temp_file = temp_model_filenames[model_name]
+    model.save(temp_file)
+
+def load_temp_model(model_name, agent_env_map, model_algo_map, temp_model_filenames):
+    env = agent_env_map[model_name]
+    algo = model_algo_map[model_name][0]
+    algo_params = model_algo_map[model_name][1]
+    temp_file = temp_model_filenames[model_name]
+    model = algo.load(temp_file, env=env, **algo_params)
+    return model
+
+def load_temp_models(agent_env_map, model_algo_map, temp_model_filenames):
+    models = {}
+    for model_name, env in agent_env_map.items():
+        algo = model_algo_map[model_name][0]
+        algo_params = model_algo_map[model_name][1]
+        temp_file = temp_model_filenames[model_name]
+        model = algo.load(temp_file, env=env, **algo_params)
+        models[model_name] = model
+    return models
+
+def save_temp_models(models, temp_model_files):
+    for model_name, model in models.items():
+        temp_file = temp_model_files[model_name]
+        model.save(temp_file)
+
+def delete_temp_model_files(temp_model_files):
+    for temp_file in temp_model_files.values():
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
+
+def ma_train2(ma_env, model_algo_map, models_to_train='all', models_to_load=None,
              total_timesteps_per_model=10_000, training_iterations=2, tb_log_suffix=""):        
         """
         Trains multiple agents in a multi-agent environment using different models and algorithms.
@@ -56,7 +104,7 @@ def ma_train2(ma_env, model_algo_map, models_to_train='all', models_to_load={},
             ma_env (MultiAgentEnv): The multi-agent environment.
             model_algo_map (dict): A dictionary mapping agent names to tuples of (algorithm, algorithm_params).
             models_to_train (list or str, optional): The list of model names to train. Defaults to 'all'.
-            models_to_load (dict, optional): A dictionary mapping model names to pre-trained models to load based on their path. Defaults to {}.
+            models_to_load (dict, optional): A dictionary mapping model names to pre-trained models to load based on their path. Defaults to None.
             total_timesteps_per_model (int, optional): The total number of timesteps to train each model. Defaults to 10_000.
             training_iterations (int, optional): The number of training iterations. Defaults to 2.
             tb_log_suffix (str, optional): The suffix to append to the TensorBoard log name. Defaults to "".
@@ -77,25 +125,43 @@ def ma_train2(ma_env, model_algo_map, models_to_train='all', models_to_load={},
                 model = algo(env=env, **algo_params)
             models[model_name] = model
 
-        previous_models = deepcopy(models)
-        ma_env.set_agent_models(models=previous_models)
+        previous_model_filenames = create_temp_model_filenames(models)
+        save_temp_models(models, previous_model_filenames)
+
+        trained_model_filenames = create_temp_model_filenames(models)
+
+        ma_env.set_agent_models(models=models)
 
         steps_per_iteration = total_timesteps_per_model // training_iterations
+        if models_to_load is None or len(models_to_load) == 0:
+            reset_timesteps = True
+        else:
+            reset_timesteps = False
 
         if models_to_train == 'all':
             models_to_train = list(models.keys())
 
         for i in range(training_iterations):
-            print(f"Training iteration {i} of {training_iterations}...")
+            print(f"Training iteration {i+1} of {training_iterations}...")
             for model_name, model in models.items():
                 if model_name in models_to_train:
                     algo_name = model.__class__.__name__
                     print(f"Training {model_name} with {algo_name}...")
-                    model.learn(total_timesteps=steps_per_iteration, progress_bar=True, reset_num_timesteps=False, tb_log_name=f"{model_name}_{algo_name}_{tb_log_suffix}")
-                    ma_env.set_agent_models(models=previous_models)
+                    model.learn(total_timesteps=steps_per_iteration, progress_bar=True, reset_num_timesteps=reset_timesteps, tb_log_name=f"{model_name}_{algo_name}_{tb_log_suffix}")
+                    
+                    # Save the trained model to a temporary file
+                    save_temp_model(model, model_name, trained_model_filenames)
+                    # Reload the previous model
+                    models[model_name] = load_temp_model(model_name, agent_env_map, model_algo_map, previous_model_filenames)
 
-            previous_models = deepcopy(models)
-            ma_env.set_agent_models(models=previous_models)
+            # Load the trained models back into the environment
+            models = load_temp_models(agent_env_map, model_algo_map, trained_model_filenames)
+            ma_env.set_agent_models(models=models)
+            # Save the trained models as the previous models
+            save_temp_models(models, previous_model_filenames)
+
+        delete_temp_model_files(previous_model_filenames)
+        delete_temp_model_files(trained_model_filenames)
 
         return models
 
@@ -129,7 +195,7 @@ def ma_evaluate(ma_env, models, total_episodes=100):
             obs, rewards, terminated, truncated, infos = ma_env.step_all(actions)
             # Update current episode rewards for each agent
             episode_rewards = {agent_id: episode_rewards[agent_id] + rewards[agent_id] for agent_id in rewards.keys()}
-        
+
         if terminated or truncated:
             # Add the episode rewards to the list of rewards for each agent
             for agent_id, reward in episode_rewards.items():

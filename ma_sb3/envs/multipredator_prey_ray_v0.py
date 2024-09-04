@@ -90,7 +90,8 @@ class MultiPredatorPreyMAEnv(BaseMAEnv):
         if self.render_mode:
             p.removeAllUserDebugItems()
         
-    def reset(self, seed=0):
+    def reset(self, seed=None):
+        super().reset(seed=seed)
         limit_spawn_perimeter = 2
         random_coor = lambda: random.uniform(-limit_spawn_perimeter, limit_spawn_perimeter)
         for predator_id in self.pybullet_predators_ids:

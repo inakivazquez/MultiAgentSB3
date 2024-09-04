@@ -20,17 +20,19 @@ if __name__ == "__main__":
     blue_team_load_previous_model = False
 
     n_players_per_team = 1
-    experiment_name = "random_ball_relgoal_matrain2"
+    single_team = True
+    experiment_name = "single_goal10_time"
+    seed = 42
 
     red_team_algo = PPO
     blue_team_algo = PPO
-    red_team_algo_params = {'policy': "MlpPolicy", 'verbose': 1, 'tensorboard_log': "./logs"}
-    blue_team_algo_params = {'policy': "MlpPolicy", 'verbose': 1, 'tensorboard_log': "./logs"}
+    red_team_algo_params = {'policy': "MlpPolicy", 'seed': seed, 'verbose': 1, 'tensorboard_log': "./logs"}
+    blue_team_algo_params = {'policy': "MlpPolicy",'seed': seed, 'verbose': 1, 'tensorboard_log': "./logs"}
 
     red_team_model_path = f"policies/model_soccer_red_{n_players_per_team}p_{red_team_algo.__name__}_{experiment_name}"
     blue_team_model_path = f"policies/model_soccer_blue_{n_players_per_team}p_{blue_team_algo.__name__}_{experiment_name}"
 
-    env_params = {'n_team_players': n_players_per_team, 'perimeter_side': 10}
+    env_params = {'n_team_players': n_players_per_team, 'single_team': single_team, 'perimeter_side': 10}
 
     if train:
         ma_env = SoccerEnv(**env_params, render=False)
@@ -44,15 +46,16 @@ if __name__ == "__main__":
         if blue_team_load_previous_model:
             models_to_load['soccer_blue'] = blue_team_model_path
 
-        trained_models = ma_train2(ma_env, model_algo_map=model_algo_map,
+        trained_models = ma_train(ma_env, model_algo_map=model_algo_map,
                  models_to_train='all', models_to_load=models_to_load,
-                 total_timesteps_per_model=500_000, training_iterations=5,
+                 total_timesteps_per_model=400_000, training_iterations=1,
                  tb_log_suffix=f"{n_players_per_team}p_{experiment_name}")
 
         ma_env.close()
 
         trained_models['soccer_red'].save(red_team_model_path)
-        trained_models['soccer_blue'].save(blue_team_model_path)
+        if not single_team:
+            trained_models['soccer_blue'].save(blue_team_model_path)
         
     # TESTING SECTION
     render = True
@@ -62,9 +65,11 @@ if __name__ == "__main__":
     ma_env = TimeLimitMAEnv(ma_env, max_episode_steps=500)
 
     model_red_team = red_team_algo.load(red_team_model_path)
-    model_blue_team = blue_team_algo.load(blue_team_model_path)
-
-    models = {'soccer_red':model_red_team, 'soccer_blue': model_blue_team}
+    if not single_team:
+        model_blue_team = blue_team_algo.load(blue_team_model_path)
+        models = {'soccer_red':model_red_team, 'soccer_blue': model_blue_team}
+    else:
+        models = {'soccer_red':model_red_team}
 
     total_episodes = 100
 

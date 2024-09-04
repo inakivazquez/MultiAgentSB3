@@ -1,5 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from gymnasium import Env
+import random
+import numpy as np
 class AgentMAEnv(Env):
         def __init__(self, shared_env, agent_id, observation_space, action_space) -> None:
             super().__init__()
@@ -18,7 +20,7 @@ class AgentMAEnv(Env):
 
             return observations, reward, terminated, truncated, info
     
-        def reset(self, seed=0):
+        def reset(self, seed=None):
             obs, info = self.shared_env.reset(seed)
             return obs[self.agent_id], info
 
@@ -120,9 +122,12 @@ class BaseMAEnv():
         # For the current state of the environment, it must return rewards, terminated, truncated, infos
         raise NotImplementedError
 
-    def reset(self, seed=0):
+    def reset(self, seed=None):
         # Must return obs, info
-        raise NotImplementedError
+        if seed is not None:
+            random.seed(seed)
+            np.random.seed(seed)
+
         
 
 class TimeLimitMAEnv(BaseMAEnv):
@@ -145,7 +150,7 @@ class TimeLimitMAEnv(BaseMAEnv):
 
         return obs, rewards, terminated, truncated, info
 
-    def reset(self, seed=0):
+    def reset(self, seed=None):
         self.current_step = 0
         return self.env.reset(seed)
 

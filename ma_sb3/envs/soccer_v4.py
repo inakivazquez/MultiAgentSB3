@@ -20,7 +20,7 @@ class SoccerEnv(BaseMAEnv):
     SIMULATION_STEP_DELAY = 1. / 240.
 
     # If n_team_players == 0, it is a single player environment
-    def __init__(self, n_team_players=2, max_speed = 2, perimeter_side = 10, render=False, record_video_file=None):
+    def __init__(self, n_team_players=2, single_team=False, max_speed = 2, perimeter_side = 10, render=False, record_video_file=None):
         super(SoccerEnv, self).__init__()
         self.render_mode = render
         # For video recording
@@ -46,12 +46,7 @@ class SoccerEnv(BaseMAEnv):
         self.pybullet_reds_ids = []
         self.pybullet_blues_ids = []
 
-        # Special case for single player environment
-        if n_team_players == 0:
-            self.single_player = True
-            n_team_players = 1
-        else:
-            self.single_player = False
+        self.single_team = single_team
 
         for _ in range(n_team_players):
             player_id = p.loadURDF("cube.urdf", [0, 0, 0], useFixedBase=False, globalScaling=0.4)
@@ -60,7 +55,7 @@ class SoccerEnv(BaseMAEnv):
             #p.changeDynamics(bodyUniqueId=player_id, mass=1, linkIndex=-1, lateralFriction=1, spinningFriction=10, rollingFriction=10)
             p.setCollisionFilterGroupMask(player_id, -1, 1, 1)
 
-        if not self.single_player:
+        if not self.single_team:
             for _ in range(n_team_players):
                 player_id = p.loadURDF("cube.urdf", [0, 0, 0], useFixedBase=False, globalScaling=0.4)
                 self.pybullet_blues_ids.append(player_id)
@@ -87,21 +82,20 @@ class SoccerEnv(BaseMAEnv):
         # and the vectors to other agents in the team, the vectors to other agents in the opposite team,
         # and finally the vector to the ball
         # and vector from the ball pos to the goal line
-        n_other_agents = 2*n_team_players - 1
-        teams = ['red', 'blue']
 
-        # Special case for single player environment
-        if self.single_player:            
-            n_other_agents = 0
+        if not self.single_team:
+            n_other_agents = 2*n_team_players - 1
+            teams = ['red', 'blue']
+        else:
+            n_other_agents = n_team_players - 1
             teams = ['red']
-            n_team_players = 1
 
         for team in teams:
             for i in range(n_team_players):
                 self.register_agent(agent_id=f'{team}_{i}',
                                 observation_space=Box(low=np.array([-2*math.pi, -self.perimeter_side/2,-self.perimeter_side/2] + [-vision_length]*2*(n_other_agents+2)), high=np.array([+2*math.pi, self.perimeter_side/2,self.perimeter_side/2] + [vision_length]*2*(n_other_agents+2)), shape=(3+2*(n_other_agents+2),), dtype=np.float32),
                                 #observation_space=Box(low=np.array([-2*math.pi, -self.perimeter_side/2,-self.perimeter_side/2] + [-vision_length]*2*(n_other_agents+1)), high=np.array([+2*math.pi, self.perimeter_side/2,self.perimeter_side/2] + [vision_length]*2*(n_other_agents+1)), shape=(3+2*(n_other_agents+1),), dtype=np.float32),
-                                action_space=Box(low=np.array([-math.pi/18, -1]), high=np.array([+math.pi/18, 1]), shape=(2,), dtype=np.float32),
+                                action_space=Box(low=np.array([-math.pi/18, -0.5]), high=np.array([+math.pi/18, 1]), shape=(2,), dtype=np.float32),
                                 model_name=f"soccer_{team}"
                                 )
        
@@ -126,7 +120,8 @@ class SoccerEnv(BaseMAEnv):
                 self.kick_ball(player_touching_ball)
                 self.players_touched_ball.add(player_touching_ball)
 
-    def reset(self, seed=0):
+    def reset(self, seed=None):
+        super().reset(seed=seed)
 
         limit_spawn_perimeter_x = self.perimeter_side / 2 -1
         limit_spawn_perimeter_y = self.perimeter_side / 4 -1
@@ -282,12 +277,12 @@ class SoccerEnv(BaseMAEnv):
             print(f"Player {player_out_of_bounds} is out of bounds")"""
         if goal:
                 if goal == 'red':
-                    rewards = self.update_reward_team(rewards, 'red', 100)
+                    rewards = self.update_reward_team(rewards, 'red', 10)
                     #rewards = self.update_reward_team(rewards, 'blue', -50)
                 else:
                     rewards = self.update_reward_team(rewards, 'blue', 100)
                     #rewards = self.update_reward_team(rewards, 'red', -50)
-                if not self.single_player or goal == 'red':
+                if not self.single_team or goal == 'red':
                     terminated = True
                     logger.info(f"Goal scored by the {goal} team")
         elif self.is_ball_out_of_bounds(): # We must check this after the goal check, becaouse goal is out of bounds
@@ -299,6 +294,9 @@ class SoccerEnv(BaseMAEnv):
                 rewards[agent_id] += 0.1 # Possesion reward :-)
                 logger.info(f"Player {agent_id} kicked the ball")
             
+        #Time penalty
+        rewards = self.update_reward_team(rewards, 'red', -0.01)
+        rewards = self.update_reward_team(rewards, 'blue', -0.01)
         #self.show_text(f"Red: {rewards['red_0']:.3f}")
         return rewards, terminated, truncated, infos
     

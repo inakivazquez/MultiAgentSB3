@@ -74,7 +74,8 @@ class PredatorPreyMAEnv(BaseMAEnv):
         for _ in range(sim_steps):
             self.step_simulation()
         
-    def reset(self, seed=0):
+    def reset(self, seed=None):
+        super().reset(seed=seed)
         limit_spawn_perimeter = self.perimeter_side / 2 -1
         random_coor = lambda: random.uniform(-limit_spawn_perimeter, limit_spawn_perimeter)
         p.resetBasePositionAndOrientation(self.pybullet_predator_id, [random_coor(), random_coor(), 0.5], [0, 0, 0, 1])

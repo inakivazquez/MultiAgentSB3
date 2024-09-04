@@ -114,7 +114,8 @@ class SoccerSingleEnv(BaseMAEnv):
         if self.render_mode:
             p.removeAllUserDebugItems()
 
-    def reset(self, seed=0):
+    def reset(self, seed=None):
+        super().reset(seed=seed)
 
         limit_spawn_perimeter = self.perimeter_side / 2 -1
         random_coor_x = lambda: random.uniform(-limit_spawn_perimeter, limit_spawn_perimeter)
