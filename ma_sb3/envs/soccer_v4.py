@@ -126,7 +126,8 @@ class SoccerEnv(BaseMAEnv):
         limit_spawn_perimeter_x = self.perimeter_side / 2 -1
         limit_spawn_perimeter_y = self.perimeter_side / 4 -1
 
-        random_coor_x = lambda: random.uniform(-limit_spawn_perimeter_x, limit_spawn_perimeter_x)
+        #random_coor_x = lambda: random.uniform(-limit_spawn_perimeter_x, limit_spawn_perimeter_x)
+        random_coor_x = lambda: random.uniform(0, limit_spawn_perimeter_x)
         random_coor_y = lambda: random.uniform(-limit_spawn_perimeter_y, limit_spawn_perimeter_y)
 
         # Reds score to the right and blues to the left
@@ -295,7 +296,7 @@ class SoccerEnv(BaseMAEnv):
                 logger.info(f"Player {agent_id} kicked the ball")
             
         #Time penalty
-        rewards = self.update_reward_team(rewards, 'red', -0.01)
+        #rewards = self.update_reward_team(rewards, 'red', -0.01)
         rewards = self.update_reward_team(rewards, 'blue', -0.01)
         #self.show_text(f"Red: {rewards['red_0']:.3f}")
         return rewards, terminated, truncated, infos
