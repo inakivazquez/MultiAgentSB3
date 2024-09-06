@@ -86,14 +86,16 @@ class GridTargetEnv(GridBaseEnv):
 
 # Example usage
 if __name__ == "__main__":
-    env = GridTargetEnv(n_rows=6, n_columns=10, smooth_movement=True,  render_mode='human')
+    render_model = 'human'
+    env = GridTargetEnv(n_rows=6, n_columns=10, smooth_movement=True,  render_mode=render_model)
     obs, info = env.reset()
     n_episodes = 10
     for _ in range(n_episodes):
         for _ in range(100): # Maximum 100 steps
             action = env.action_space.sample()  # Random action
             obs, reward, terminated, truncated, info = env.step(action)
-            time.sleep(0.1)
+            if render_model == 'human':
+                time.sleep(0.1)
             if terminated or truncated:
                 break
 

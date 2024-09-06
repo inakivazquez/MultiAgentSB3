@@ -36,6 +36,8 @@ class GridBaseEnv(Env):
 
         if self.render_mode == 'human':
             p.connect(p.GUI)
+            # For recording a video, use the following line instead
+            #p.connect(p.GUI, options=f"--mp4='grid_target.mp4'")
             # Hide debug panels in PyBullet
             p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
             p.configureDebugVisualizer(p.COV_ENABLE_TINY_RENDERER, 0)
@@ -43,7 +45,7 @@ class GridBaseEnv(Env):
             # Reorient the debug camera
             p.resetDebugVisualizerCamera(cameraDistance=6, cameraYaw=0, cameraPitch=-60, cameraTargetPosition=[self.n_columns/2 - self.visual_offset ,0,0])
 
-        elif self.render_mode is not None:
+        elif self.render_mode is None:
             p.connect(p.DIRECT)
 
         p.setGravity(0, 0, -9.81)
@@ -157,7 +159,7 @@ class GridBaseEnv(Env):
             basePosition=[pos_x + self.visual_offset, pos_y + self.visual_offset, half_height]
         )
 
-    def move_agent(self, target_x, target_y, step_size=0.01, sleep_time=0.005):
+    def move_agent(self, target_x, target_y, step_size=0.01, sleep_time=0.002):
         # Get the current position and orientation of the object
         current_pos, current_orientation = p.getBasePositionAndOrientation(self.pybullet_agent_id)
         current_orientation = [0,0,0,1] # Always keep the same orientation
