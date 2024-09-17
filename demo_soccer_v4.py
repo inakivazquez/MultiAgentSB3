@@ -15,17 +15,18 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.WARNING, format='%(levelname)s: %(message)s')
 
     train = True
-    train = False
-    red_team_load_previous_model = True
+    #train = False
+    red_team_load_previous_model = False
     blue_team_load_previous_model = False
 
     n_players_per_team = 1
-    single_team = True
-    experiment_name = "single_goal10_spawn0"
+    single_team = False
+    experiment_name = "independent"
     seed = 42
 
-    red_team_algo = PPO
-    blue_team_algo = PPO
+    red_team_algo = SAC
+    blue_team_algo = SAC
+
     red_team_algo_params = {'policy': "MlpPolicy", 'seed': seed, 'verbose': 1, 'tensorboard_log': "./logs"}
     blue_team_algo_params = {'policy': "MlpPolicy", 'seed': seed, 'verbose': 1, 'tensorboard_log': "./logs"}
 
@@ -46,9 +47,11 @@ if __name__ == "__main__":
         if blue_team_load_previous_model:
             models_to_load['soccer_blue'] = blue_team_model_path
 
-        trained_models = ma_train(ma_env, model_algo_map=model_algo_map,
-                 models_to_train='all', models_to_load=models_to_load,
-                 total_timesteps_per_model=1_000_000, training_iterations=1,
+        models_to_train = ['soccer_blue']
+
+        trained_models = ma_train2(ma_env, model_algo_map=model_algo_map,
+                 models_to_train=models_to_train, models_to_load=models_to_load,
+                 total_timesteps_per_model=500_000, training_iterations=1,
                  tb_log_suffix=f"{n_players_per_team}p_{experiment_name}")
 
         ma_env.close()

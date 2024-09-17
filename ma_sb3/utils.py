@@ -41,8 +41,6 @@ def ma_train(ma_env, model_algo_map, models_to_train='all', models_to_load=None,
         else:
             reset_timesteps = False
 
-        print(reset_timesteps)
-
         steps_per_iteration = total_timesteps_per_model // training_iterations
 
         if models_to_train == 'all':
@@ -55,6 +53,7 @@ def ma_train(ma_env, model_algo_map, models_to_train='all', models_to_load=None,
                     algo_name = model.__class__.__name__
                     print(f"Training {model_name} with {algo_name}...")
                     model.learn(total_timesteps=steps_per_iteration, progress_bar=True, reset_num_timesteps=reset_timesteps, tb_log_name=f"{model_name}_{algo_name}_{tb_log_suffix}")
+            reset_timesteps = False # To avoid resetting the timesteps after the first iteration
         return models
 
 def create_temp_model_filenames(models):
@@ -133,6 +132,7 @@ def ma_train2(ma_env, model_algo_map, models_to_train='all', models_to_load=None
         ma_env.set_agent_models(models=models)
 
         steps_per_iteration = total_timesteps_per_model // training_iterations
+       
         if models_to_load is None or len(models_to_load) == 0:
             reset_timesteps = True
         else:
@@ -149,15 +149,18 @@ def ma_train2(ma_env, model_algo_map, models_to_train='all', models_to_load=None
                     print(f"Training {model_name} with {algo_name}...")
                     model.learn(total_timesteps=steps_per_iteration, progress_bar=True, reset_num_timesteps=reset_timesteps, tb_log_name=f"{model_name}_{algo_name}_{tb_log_suffix}")
                     
-                    # Save the trained model to a temporary file
-                    save_temp_model(model, model_name, trained_model_filenames)
-                    # Reload the previous model
-                    models[model_name] = load_temp_model(model_name, agent_env_map, model_algo_map, previous_model_filenames)
+                # Save the model (trained or not) to a temporary file
+                save_temp_model(model, model_name, trained_model_filenames)
+                # Reload the previous model
+                models[model_name] = load_temp_model(model_name, agent_env_map, model_algo_map, previous_model_filenames)
+                # Reassign the models
+                ma_env.set_agent_models(models=models)
 
-            # Load the trained models back into the environment
+            reset_timesteps = False # To avoid resetting the timesteps after the first iteration
+            # Load the models (trained or not) back into the environment
             models = load_temp_models(agent_env_map, model_algo_map, trained_model_filenames)
             ma_env.set_agent_models(models=models)
-            # Save the trained models as the previous models
+            # Save the models as the previous models
             save_temp_models(models, previous_model_filenames)
 
         delete_temp_model_files(previous_model_filenames)

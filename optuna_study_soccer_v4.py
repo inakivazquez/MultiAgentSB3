@@ -32,8 +32,9 @@ def objective(trial: optuna.Trial):
     net_arch_nodes = trial.suggest_categorical('net_arch_nodes', hyperparameters['net_arch_nodes']) 
 
     policy_kwargs = dict(net_arch=[net_arch_nodes, net_arch_nodes])
+    seed = 42
 
-    model = PPO('MlpPolicy', env, verbose=True,  gamma=gamma,  learning_rate=learning_rate,
+    model = PPO('MlpPolicy', env, seed=seed, verbose=True,  gamma=gamma,  learning_rate=learning_rate,
                         batch_size=batch_size,  use_sde=use_sde, policy_kwargs=policy_kwargs)    
     
     print(f"Trial {trial.number} with hyperparameters: {trial.params}")
@@ -76,7 +77,7 @@ def create_study_dir(optuna_dir, study_dir, delete_existing=True):
 # Create environment
 n_players_per_team = 1
 single_team = True
-experiment_name = "single_soccer_ppo"
+experiment_name = "single_soccer_ppo_easygoal"
 
 env_params = {'n_team_players': n_players_per_team, 'single_team': single_team, 'perimeter_side': 10}
 

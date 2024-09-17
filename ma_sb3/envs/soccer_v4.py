@@ -12,6 +12,7 @@ from gymnasium.spaces import Box
 from pynput import keyboard
 
 from ma_sb3 import AgentMAEnv, BaseMAEnv
+from ma_sb3.envs.soccer_stadium import create_stadium, create_player, create_ball
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ class SoccerEnv(BaseMAEnv):
     SIMULATION_STEP_DELAY = 1. / 240.
 
     # If n_team_players == 0, it is a single player environment
-    def __init__(self, n_team_players=2, single_team=False, max_speed = 2, perimeter_side = 10, render=False, record_video_file=None):
+    def __init__(self, n_team_players=2, single_team=False, max_speed = 1, perimeter_side = 10, render=False, record_video_file=None):
         super(SoccerEnv, self).__init__()
         self.render_mode = render
         # For video recording
@@ -43,38 +44,33 @@ class SoccerEnv(BaseMAEnv):
         # Load the plane and objects
         self.pybullet_plane_id = p.loadURDF("plane.urdf", [0,0,0])
 
+        # Create the stadium
+        self.perimeter_side = perimeter_side
+        pybullet_goal_ids = create_stadium(self.perimeter_side)
+        self.pybullet_goal_right_id = pybullet_goal_ids[0]
+        self.pybullet_goal_left_id = pybullet_goal_ids[1]
+
+        # Create the players
         self.pybullet_reds_ids = []
         self.pybullet_blues_ids = []
+
+        red_color = [0.8, 0.1, 0.1, 1]
+        blue_color = [0.1, 0.1, 0.8, 1]
 
         self.single_team = single_team
 
         for _ in range(n_team_players):
-            player_id = p.loadURDF("cube.urdf", [0, 0, 0], useFixedBase=False, globalScaling=0.4)
+            player_id = create_player([0, 0, 0], red_color)
             self.pybullet_reds_ids.append(player_id)
-            p.changeVisualShape(player_id, -1, rgbaColor=[0.8, 0.1, 0.1, 1])
-            #p.changeDynamics(bodyUniqueId=player_id, mass=1, linkIndex=-1, lateralFriction=1, spinningFriction=10, rollingFriction=10)
-            p.setCollisionFilterGroupMask(player_id, -1, 1, 1)
 
         if not self.single_team:
             for _ in range(n_team_players):
-                player_id = p.loadURDF("cube.urdf", [0, 0, 0], useFixedBase=False, globalScaling=0.4)
+                player_id = create_player([0, 0, 0], blue_color)
                 self.pybullet_blues_ids.append(player_id)
-                p.changeVisualShape(player_id, -1, rgbaColor=[0.1, 0.1, 0.8, 1])
-                #p.changeDynamics(bodyUniqueId=player_id, mass=1, linkIndex=-1, lateralFriction=1, spinningFriction=10, rollingFriction=10)
-                p.setCollisionFilterGroupMask(player_id, -1, 1, 1)
 
-        self.pybullet_ball_id = p.loadURDF("soccerball.urdf", [0, 0, 0.5], useFixedBase=False, globalScaling=0.3)
+        self.pybullet_ball_id = create_ball([0, 0, 0])
 
-        lateral_friction = 1.0
-        spinning_friction = 0.05
-        rolling_friction = 0.05
-        p.changeDynamics(bodyUniqueId=self.pybullet_ball_id, linkIndex=-1,
-                         lateralFriction=lateral_friction, spinningFriction=spinning_friction, rollingFriction=rolling_friction, 
-                         mass = 0.1, restitution=0.9) # Restitution is the bounciness of the ball
-
-        self.perimeter_side = perimeter_side
-        self.draw_perimeter(self.perimeter_side)
-        vision_length = 20 # Fixed value
+        vision_length = self.perimeter_side
 
         # Create the agents
         # Observation space is
@@ -93,9 +89,10 @@ class SoccerEnv(BaseMAEnv):
         for team in teams:
             for i in range(n_team_players):
                 self.register_agent(agent_id=f'{team}_{i}',
-                                observation_space=Box(low=np.array([-2*math.pi, -self.perimeter_side/2,-self.perimeter_side/2] + [-vision_length]*2*(n_other_agents+2)), high=np.array([+2*math.pi, self.perimeter_side/2,self.perimeter_side/2] + [vision_length]*2*(n_other_agents+2)), shape=(3+2*(n_other_agents+2),), dtype=np.float32),
-                                #observation_space=Box(low=np.array([-2*math.pi, -self.perimeter_side/2,-self.perimeter_side/2] + [-vision_length]*2*(n_other_agents+1)), high=np.array([+2*math.pi, self.perimeter_side/2,self.perimeter_side/2] + [vision_length]*2*(n_other_agents+1)), shape=(3+2*(n_other_agents+1),), dtype=np.float32),
-                                action_space=Box(low=np.array([-math.pi/18, -0.5]), high=np.array([+math.pi/18, 1]), shape=(2,), dtype=np.float32),
+                                #observation_space=Box(low=np.array([-2*math.pi, -self.perimeter_side/2,-self.perimeter_side/2] + [-vision_length]*2*(n_other_agents+2)), high=np.array([+2*math.pi, self.perimeter_side/2,self.perimeter_side/2] + [vision_length]*2*(n_other_agents+2)), shape=(3+2*(n_other_agents+2),), dtype=np.float32),
+                                observation_space=Box(low=np.array([-2*math.pi,-10, -self.perimeter_side/2,-self.perimeter_side/2] + [-vision_length]*2*(n_other_agents+1)), high=np.array([+2*math.pi,+10, self.perimeter_side/2,self.perimeter_side/2] + [vision_length]*2*(n_other_agents+1)), shape=(4+2*(n_other_agents+1),), dtype=np.float32),
+                                #observation_space=Box(low=np.array([-2*math.pi] + [-self.perimeter_side/2,-self.perimeter_side/2]*2), high=np.array([+2*math.pi] + [self.perimeter_side/2,self.perimeter_side/2]*2), shape=(5,), dtype=np.float32),
+                                action_space=Box(low=np.array([-1, -1]), high=np.array([+1, +1]), shape=(2,), dtype=np.float32),
                                 model_name=f"soccer_{team}"
                                 )
        
@@ -111,14 +108,23 @@ class SoccerEnv(BaseMAEnv):
         if self.render_mode:
             time.sleep(self.SIMULATION_STEP_DELAY)
 
-    def sync_wait_for_actions_completion(self, sim_steps=10):
+    def sync_wait_for_actions_completion(self, max_sim_steps=500):
         self.players_touched_ball = set()
-        for _ in range(sim_steps):
+        for step in range(max_sim_steps):
             self.step_simulation()
             player_touching_ball = self.player_touching_ball()
             if player_touching_ball is not None:
                 self.kick_ball(player_touching_ball)
                 self.players_touched_ball.add(player_touching_ball)
+            # Every 10 sim steps, check status
+            if step % 10 == 0:
+                if self.is_goal() or self.is_ball_out_of_bounds():
+                    return
+                # If the players are not moving, return
+                players_velocity = [np.linalg.norm(p.getBaseVelocity(player_id)[0]) for player_id in self.pybullet_reds_ids + self.pybullet_blues_ids]
+                if all([v < 2*self.max_speed for v in players_velocity]):
+                    return
+
 
     def reset(self, seed=None):
         super().reset(seed=seed)
@@ -126,15 +132,15 @@ class SoccerEnv(BaseMAEnv):
         limit_spawn_perimeter_x = self.perimeter_side / 2 -1
         limit_spawn_perimeter_y = self.perimeter_side / 4 -1
 
-        #random_coor_x = lambda: random.uniform(-limit_spawn_perimeter_x, limit_spawn_perimeter_x)
-        random_coor_x = lambda: random.uniform(0, limit_spawn_perimeter_x)
+        random_coor_x = lambda: random.uniform(-limit_spawn_perimeter_x, limit_spawn_perimeter_x)
+        #random_coor_x = lambda: random.uniform(0, limit_spawn_perimeter_x)
         random_coor_y = lambda: random.uniform(-limit_spawn_perimeter_y, limit_spawn_perimeter_y)
 
         # Reds score to the right and blues to the left
 
         # Opposite orientation for the teams
-        quat_red = p.getQuaternionFromEuler([0, 0, 0])
-        quat_blue = p.getQuaternionFromEuler([0, 0, math.pi])
+        quat_red = p.getQuaternionFromEuler([0, 0, math.pi])
+        quat_blue = p.getQuaternionFromEuler([0, 0, 0])
 
         for player_id in self.pybullet_reds_ids:
             p.resetBasePositionAndOrientation(player_id, [random_coor_x(), random_coor_y(),  0.5], quat_red)
@@ -166,6 +172,7 @@ class SoccerEnv(BaseMAEnv):
         #linear_velocity, angular_velocity = p.getBaseVelocity(pybullet_object_id) # Conserving inertia for the next step
         linear_velocity = angular_velocity = [0,0,0] # Starting still in next step
 
+        rotation_offset = rotation_offset * math.pi / 6 # 30 degrees max rotation
         angle = self.get_orientation(pybullet_object_id)
         angle += rotation_offset
         p.resetBasePositionAndOrientation(pybullet_object_id, position, p.getQuaternionFromEuler([0, 0, angle]))
@@ -180,9 +187,9 @@ class SoccerEnv(BaseMAEnv):
 
         self.move(pybullet_object_id, force, self.max_speed)
 
-    def move(self, pybullet_object_id, force, nax_speed):
+    def move(self, pybullet_object_id, force, max_speed):
         factor = 1000
-        force *= factor * nax_speed
+        force *= factor * max_speed
         force = [force, 0, 0]
         position, orientation = p.getBasePositionAndOrientation(pybullet_object_id)
         # Convert quaternion to rotation matrix
@@ -212,9 +219,15 @@ class SoccerEnv(BaseMAEnv):
         return relative_position_base_frame
 
     def get_observation(self, agent_id):
+        pybullet_agent_id = self.get_pybullet_id(agent_id)
         obs = np.array([])
-        my_orientation = self.get_orientation(self.get_pybullet_id(agent_id))
+        my_orientation = self.get_orientation(pybullet_agent_id)
         obs = np.append(obs, my_orientation)
+
+        # Add speed
+        velocity, _ = p.getBaseVelocity(pybullet_agent_id)
+        velocity = math.sqrt(velocity[0]**2 + velocity[1]**2)
+        obs = np.concatenate((obs, [velocity]), dtype=np.float32)
 
         my_pos = self.get_position(agent_id) # My position
         my_pybullet_id = self.get_pybullet_id(agent_id)
@@ -238,6 +251,7 @@ class SoccerEnv(BaseMAEnv):
         ball_pos = p.getBasePositionAndOrientation(self.pybullet_ball_id)[0][:2]
         ball_vector = self.get_oriented_distance_vector(my_pybullet_id, self.pybullet_ball_id)[:2]
         obs = np.append(obs, ball_vector)
+        #obs = np.append(obs, ball_pos)
 
         """
         if random.random() < 0.01:
@@ -246,17 +260,16 @@ class SoccerEnv(BaseMAEnv):
         """
         
 
-        # And finally vector from the ball pos to the goal line
+        # And finally vector from the agent to the goal line
 
         if agent_id.startswith('red'):
-            goal_id = self.pybullet_goal_right
+            goal_id = self.pybullet_goal_right_id
         else:
-            goal_id = self.pybullet_goal_left
+            goal_id = self.pybullet_goal_left_id
 
-        #goal_line_vector = self.get_oriented_distance_vector(self.pybullet_ball_id, goal_id)[:2]
         goal_line_vector = self.get_oriented_distance_vector(my_pybullet_id, goal_id)[:2]
 
-        obs = np.append(obs, goal_line_vector)
+        #obs = np.append(obs, goal_line_vector)
 
         return obs
 
@@ -278,7 +291,7 @@ class SoccerEnv(BaseMAEnv):
             print(f"Player {player_out_of_bounds} is out of bounds")"""
         if goal:
                 if goal == 'red':
-                    rewards = self.update_reward_team(rewards, 'red', 10)
+                    rewards = self.update_reward_team(rewards, 'red', 100)
                     #rewards = self.update_reward_team(rewards, 'blue', -50)
                 else:
                     rewards = self.update_reward_team(rewards, 'blue', 100)
@@ -296,8 +309,8 @@ class SoccerEnv(BaseMAEnv):
                 logger.info(f"Player {agent_id} kicked the ball")
             
         #Time penalty
-        #rewards = self.update_reward_team(rewards, 'red', -0.01)
-        rewards = self.update_reward_team(rewards, 'blue', -0.01)
+        rewards = self.update_reward_team(rewards, 'red', -0.1)
+        rewards = self.update_reward_team(rewards, 'blue', -0.1)
         #self.show_text(f"Red: {rewards['red_0']:.3f}")
         return rewards, terminated, truncated, infos
     
@@ -308,6 +321,7 @@ class SoccerEnv(BaseMAEnv):
         return None
 
     def kick_ball(self, agent_id):
+        return
         # Get the position of the agent and the ball
         agent_position = self.get_position(agent_id)
         ball_position = p.getBasePositionAndOrientation(self.pybullet_ball_id)[0]
@@ -427,139 +441,6 @@ class SoccerEnv(BaseMAEnv):
 
     def close(self):
         p.disconnect()
-
-    def draw_perimeter(self, side_length):
-        height = 0.4
-        half_size = side_length / 2.0 + 0.6
-        half_height = height / 2.0
-        color = [0, 0.4, 0, 0.9]  # Green color
-
-        # Create visual shape for the box
-        visual_shape_id = p.createVisualShape(
-            shapeType=p.GEOM_BOX,
-            halfExtents=[half_size, half_size/2, half_height],
-            rgbaColor=color,
-            specularColor=[0, 0, 0]
-        )
-
-        # Create collision shape for the box
-        collision_shape_id = p.createCollisionShape(
-            shapeType=p.GEOM_BOX,
-            halfExtents=[half_size, half_size/2, half_height]
-        )
-
-        # Create the multi-body object
-        perimeter_id = p.createMultiBody(
-            baseMass=0,  # Static object
-            baseCollisionShapeIndex=collision_shape_id,
-            baseVisualShapeIndex=visual_shape_id,
-            basePosition=[0, 0, half_height]
-        )
-
-        p.changeDynamics(perimeter_id, -1, lateralFriction=0.5)
-
-        #self.create_pitch(side_length, 0.1, 0.2, height , [0.2, 0.2, 0.2, 1])
-        self.create_pitch(side_length, 0.1, 0.4, height , [0.5, 0.5, 0.5, 1])
-
-    def create_pitch(self, length, thickness, height, base_height, color):
-        """
-        Creates a rectangular structure with walls, with gaps in the center of the shorter sides.
-
-        Args:
-            length (float): The length of the rectangle (double the width).
-            width (float): The width of the rectangle (half the length).
-            thickness (float): The thickness of the walls.
-            height (float): The height of the walls.
-            base_height (float): The base height at which the walls are positioned.
-            color (tuple): A tuple representing the color of the walls in RGB format (r, g, b).
-        """
-        # Define half dimensions for easier calculations
-        width = length / 2
-        half_length = length / 2
-        half_width = width / 2
-        half_thickness = thickness / 2
-        half_height = height / 2
-        gap_size = width * 0.40
-        gap_size = 2
-        segment_length = (width - gap_size) / 2
-
-        # Create collision shape for wall segments
-        long_wall_shape = p.createCollisionShape(shapeType=p.GEOM_BOX,
-                                                halfExtents=[half_length, half_thickness, half_height])
-        short_wall_shape = p.createCollisionShape(shapeType=p.GEOM_BOX,
-                                                halfExtents=[segment_length / 2, half_thickness, half_height])
-
-        # Define the visual shape for the walls
-        long_wall_visual = p.createVisualShape(shapeType=p.GEOM_BOX,
-                                            halfExtents=[half_length, half_thickness, half_height],
-                                            rgbaColor=[color[0], color[1], color[2], 1])
-        short_wall_visual = p.createVisualShape(shapeType=p.GEOM_BOX,
-                                                halfExtents=[segment_length / 2, half_thickness, half_height],
-                                                rgbaColor=[color[0], color[1], color[2], 1])
-
-        # Position and orientation for the walls
-        positions = [
-            [0, -half_width + half_thickness, base_height + half_height],   # Front wall
-            [0, +half_width - half_thickness, base_height + half_height],  # Back wall
-            [half_length - half_thickness, half_width - segment_length / 2 - half_thickness, base_height + half_height],  # Right wall (segment 1)
-            [half_length - half_thickness, -half_width + segment_length / 2 + half_thickness, base_height + half_height],  # Right wall (segment 2)
-            [-half_length + half_thickness, half_width - segment_length / 2 - half_thickness, base_height + half_height],  # Left wall (segment 1)
-            [-half_length + half_thickness, -half_width + segment_length / 2 + half_thickness, base_height + half_height]  # Left wall (segment 2)
-        ]
-        orientations = [
-            p.getQuaternionFromEuler([0, 0, 0]),                    # Front wall
-            p.getQuaternionFromEuler([0, 0, 0]),                    # Back wall
-            p.getQuaternionFromEuler([0, 0, 1.5708]),  # Right wall (90 degrees rotation around Z-axis)
-            p.getQuaternionFromEuler([0, 0, 1.5708]),  # Right wall (90 degrees rotation around Z-axis)
-            p.getQuaternionFromEuler([0, 0, 1.5708]),  # Left wall (90 degrees rotation around Z-axis)
-            p.getQuaternionFromEuler([0, 0, 1.5708])   # Left wall (90 degrees rotation around Z-axis)
-        ]
-
-        # Create walls
-        # Long walls
-        for i in range(2):
-            id = p.createMultiBody(baseMass=0,
-                            baseCollisionShapeIndex=long_wall_shape,
-                            baseVisualShapeIndex=long_wall_visual,
-                            basePosition=positions[i],
-                            baseOrientation=orientations[i])
-            p.setCollisionFilterGroupMask(id, -1, 2, 1)
-            p.changeDynamics(id, -1, restitution=0.8) # Bounciness
-
-
-        # Short walls with gaps
-        for i in range(2, 6):
-            id = p.createMultiBody(baseMass=0,
-                            baseCollisionShapeIndex=short_wall_shape,
-                            baseVisualShapeIndex=short_wall_visual,
-                            basePosition=positions[i],
-                            baseOrientation=orientations[i])
-            p.setCollisionFilterGroupMask(id, -1, 2, 1)
-            p.changeDynamics(id, -1, restitution=0.8) # Bounciness
-
-        self.pybullet_goal_right = self.create_goal([half_length - 0.15, 0, base_height], p.getQuaternionFromEuler([0, 0, 0]))
-        self.pybullet_goal_left = self.create_goal([-half_length + 0.15, 0, base_height], p.getQuaternionFromEuler([0, 0, math.pi]))
-
-    def create_goal(self, position, orientation):
-        script_dir = os.path.dirname(__file__)
-        goal_path = os.path.join(script_dir, "./meshes/goal.obj")
-
-        scaling_factor = [1, 1, 1]
-        visual_shape_id = p.createVisualShape(shapeType=p.GEOM_MESH, fileName=goal_path, meshScale=scaling_factor)
-
-        # Add a collision shape for physics simulation (optional)
-        collision_shape_id = p.createCollisionShape(shapeType=p.GEOM_MESH, fileName=goal_path, meshScale=scaling_factor, flags=p.GEOM_FORCE_CONCAVE_TRIMESH)
-
-        # Create a multibody object that combines both visual and collision shapes
-        goal_id = p.createMultiBody(baseMass=0, baseCollisionShapeIndex=collision_shape_id, baseVisualShapeIndex=visual_shape_id, basePosition=position, baseOrientation=orientation)
-        #goal_id = p.createMultiBody(baseMass=0, baseVisualShapeIndex=visual_shape_id, basePosition=position, baseOrientation=orientation)
-
-        p.changeDynamics(goal_id, -1, restitution=0.8) # Bounciness
-
-        return goal_id
-
-
-
 
     def show_text(self, text):
         if self.pybullet_text_id is not None:
