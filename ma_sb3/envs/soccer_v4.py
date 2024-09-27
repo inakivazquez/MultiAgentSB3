@@ -21,14 +21,14 @@ class SoccerEnv(BaseMAEnv):
     SIMULATION_STEP_DELAY = 1. / 240.
 
     # If n_team_players == 0, it is a single player environment
-    def __init__(self, n_team_players=2, single_team=False, max_speed = 1, perimeter_side = 10, render=False, record_video_file=None):
+    def __init__(self, n_team_players=2, single_team=False, max_speed = 1, perimeter_side = 10, render=None, record_video_file=None):
         super(SoccerEnv, self).__init__()
         self.render_mode = render
         # For video recording
         if record_video_file is not None:
-            self.physicsClient = p.connect(p.GUI if render else p.DIRECT, options=f"--mp4='{record_video_file}'")
+            self.physicsClient = p.connect(p.GUI if render=='human' else p.DIRECT, options=f"--mp4='{record_video_file}'")
         else:
-            self.physicsClient = p.connect(p.GUI if render else p.DIRECT)
+            self.physicsClient = p.connect(p.GUI if render=='human' else p.DIRECT)
 
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         p.setGravity(0, 0, -9.81)
@@ -129,11 +129,13 @@ class SoccerEnv(BaseMAEnv):
     def reset(self, seed=None):
         super().reset(seed=seed)
 
+
+
         limit_spawn_perimeter_x = self.perimeter_side / 2 -1
         limit_spawn_perimeter_y = self.perimeter_side / 4 -1
 
-        random_coor_x = lambda: random.uniform(-limit_spawn_perimeter_x, limit_spawn_perimeter_x)
-        #random_coor_x = lambda: random.uniform(0, limit_spawn_perimeter_x)
+        #random_coor_x = lambda: random.uniform(-limit_spawn_perimeter_x, limit_spawn_perimeter_x)
+        random_coor_x = lambda: random.uniform(0, limit_spawn_perimeter_x)
         random_coor_y = lambda: random.uniform(-limit_spawn_perimeter_y, limit_spawn_perimeter_y)
 
         # Reds score to the right and blues to the left
@@ -143,16 +145,16 @@ class SoccerEnv(BaseMAEnv):
         quat_blue = p.getQuaternionFromEuler([0, 0, 0])
 
         for player_id in self.pybullet_reds_ids:
-            p.resetBasePositionAndOrientation(player_id, [random_coor_x(), random_coor_y(),  0.5], quat_red)
+            p.resetBasePositionAndOrientation(player_id, [-random_coor_x(), random_coor_y(),  0.5], quat_red)
             p.resetBaseVelocity(player_id, [0, 0, 0], [0, 0, 0])
 
         for player_id in self.pybullet_blues_ids:
-            p.resetBasePositionAndOrientation(player_id, [random_coor_x(), random_coor_y(), 0.5], quat_blue)
+            p.resetBasePositionAndOrientation(player_id, [+random_coor_x(), random_coor_y(), 0.5], quat_blue)
             p.resetBaseVelocity(player_id, [0, 0, 0], [0, 0, 0])
 
-        #p.resetBasePositionAndOrientation(self.pybullet_ball_id, [0,0, 0.5], [0, 0, 0, 1])
+        p.resetBasePositionAndOrientation(self.pybullet_ball_id, [0,0, 0.5], [0, 0, 0, 1])
         # Random ball position version
-        p.resetBasePositionAndOrientation(self.pybullet_ball_id, [random_coor_x(), random_coor_y(),  1], [0, 0, 0, 1])
+        #p.resetBasePositionAndOrientation(self.pybullet_ball_id, [random_coor_x(), random_coor_y(),  1], [0, 0, 0, 1])
         p.resetBaseVelocity(self.pybullet_ball_id, [0, 0, 0], [0, 0, 0])
         self.sync_wait_for_actions_completion(100)
 
@@ -244,6 +246,11 @@ class SoccerEnv(BaseMAEnv):
                     my_team_vectors.append(other_distance_vector)
                 else:
                     other_team_vectors.append(other_distance_vector)
+
+        # Order the vectors by distance (to facilitate learning)
+        #my_team_vectors.sort(key=lambda x: np.linalg.norm(x))
+        #other_team_vectors.sort(key=lambda x: np.linalg.norm(x))
+        # Add the vectors to the observation
         obs = np.append(obs, my_team_vectors)
         obs = np.append(obs, other_team_vectors)
 

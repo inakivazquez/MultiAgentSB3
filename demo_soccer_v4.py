@@ -4,7 +4,7 @@ from ma_sb3.utils import ma_train, ma_evaluate, ma_train2
 
 from gymnasium.wrappers.time_limit import TimeLimit
 
-from stable_baselines3 import PPO, SAC
+from stable_baselines3 import PPO, SAC, TD3, DDPG, DQN
 import pybullet as p
 import logging
 
@@ -15,11 +15,11 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.WARNING, format='%(levelname)s: %(message)s')
 
     train = True
-    #train = False
-    red_team_load_previous_model = False
-    blue_team_load_previous_model = False
+    train = False
+    red_team_load_previous_model = True
+    blue_team_load_previous_model = True
 
-    n_players_per_team = 1
+    n_players_per_team = 2
     single_team = False
     experiment_name = "independent"
     seed = 42
@@ -36,7 +36,7 @@ if __name__ == "__main__":
     env_params = {'n_team_players': n_players_per_team, 'single_team': single_team, 'perimeter_side': 10}
 
     if train:
-        ma_env = SoccerEnv(**env_params, render=False)
+        ma_env = SoccerEnv(**env_params, render=None)
         ma_env = TimeLimitMAEnv(ma_env, max_episode_steps=500)
 
         model_algo_map = {'soccer_red': (red_team_algo, red_team_algo_params), 'soccer_blue': (blue_team_algo, blue_team_algo_params)}
@@ -47,23 +47,28 @@ if __name__ == "__main__":
         if blue_team_load_previous_model:
             models_to_load['soccer_blue'] = blue_team_model_path
 
+        models_to_train = 'all'
         models_to_train = ['soccer_blue']
 
         trained_models = ma_train2(ma_env, model_algo_map=model_algo_map,
                  models_to_train=models_to_train, models_to_load=models_to_load,
-                 total_timesteps_per_model=500_000, training_iterations=1,
+                 total_timesteps_per_model=300_000, training_iterations=1,
                  tb_log_suffix=f"{n_players_per_team}p_{experiment_name}")
 
         ma_env.close()
 
         trained_models['soccer_red'].save(red_team_model_path)
+        if red_team_algo in [SAC, TD3, DDPG, DQN]:
+            trained_models['soccer_red'].save_replay_buffer(red_team_model_path + ".pkl")
         if not single_team:
             trained_models['soccer_blue'].save(blue_team_model_path)
+            if blue_team_algo in [SAC, TD3, DDPG, DQN]:
+                trained_models['soccer_blue'].save_replay_buffer(blue_team_model_path + ".pkl")
         
     # TESTING SECTION
-    render = True
+    render = 'human'
     record_video_file = None
-    #record_video_file = "soccer.mp4"
+    #record_video_file = "soccer_2vs2.mp4"
     ma_env = SoccerEnv(**env_params, render=render, record_video_file=record_video_file)
     ma_env = TimeLimitMAEnv(ma_env, max_episode_steps=500)
 

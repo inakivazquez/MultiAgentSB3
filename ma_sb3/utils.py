@@ -2,7 +2,7 @@ from ma_sb3 import BaseMAEnv, AgentMAEnv
 import tempfile
 import os
 import time
-
+from stable_baselines3 import SAC, TD3, DDPG, DQN
     
 
 def ma_train(ma_env, model_algo_map, models_to_train='all', models_to_load=None,
@@ -66,6 +66,8 @@ def create_temp_model_filenames(models):
 def save_temp_model(model, model_name, temp_model_filenames):
     temp_file = temp_model_filenames[model_name]
     model.save(temp_file)
+    if model.__class__ in [SAC, TD3, DDPG, DQN]:
+        model.save_replay_buffer(temp_file + ".pkl")
 
 def load_temp_model(model_name, agent_env_map, model_algo_map, temp_model_filenames):
     env = agent_env_map[model_name]
@@ -73,6 +75,8 @@ def load_temp_model(model_name, agent_env_map, model_algo_map, temp_model_filena
     algo_params = model_algo_map[model_name][1]
     temp_file = temp_model_filenames[model_name]
     model = algo.load(temp_file, env=env, **algo_params)
+    if algo in [SAC, TD3, DDPG, DQN]:
+        model.load_replay_buffer(temp_file + ".pkl")
     return model
 
 def load_temp_models(agent_env_map, model_algo_map, temp_model_filenames):
@@ -83,12 +87,16 @@ def load_temp_models(agent_env_map, model_algo_map, temp_model_filenames):
         temp_file = temp_model_filenames[model_name]
         model = algo.load(temp_file, env=env, **algo_params)
         models[model_name] = model
+        if algo in [SAC, TD3, DDPG, DQN]:
+            model.load_replay_buffer(temp_file + ".pkl")
     return models
 
 def save_temp_models(models, temp_model_files):
     for model_name, model in models.items():
         temp_file = temp_model_files[model_name]
         model.save(temp_file)
+        if model.__class__ in [SAC, TD3, DDPG, DQN]:
+            model.save_replay_buffer(temp_file + ".pkl")
 
 def delete_temp_model_files(temp_model_files):
     for temp_file in temp_model_files.values():
@@ -120,6 +128,8 @@ def ma_train2(ma_env, model_algo_map, models_to_train='all', models_to_load=None
             algo_params = model_algo_map[model_name][1]
             if models_to_load is not None and model_name in models_to_load:
                 model = algo.load(models_to_load[model_name], env=env, **algo_params)
+                if algo in [SAC, TD3, DDPG, DQN]:
+                    model.load_replay_buffer(models_to_load[model_name] + ".pkl")
             else:
                 model = algo(env=env, **algo_params)
             models[model_name] = model
@@ -157,6 +167,7 @@ def ma_train2(ma_env, model_algo_map, models_to_train='all', models_to_load=None
                 ma_env.set_agent_models(models=models)
 
             reset_timesteps = False # To avoid resetting the timesteps after the first iteration
+            
             # Load the models (trained or not) back into the environment
             models = load_temp_models(agent_env_map, model_algo_map, trained_model_filenames)
             ma_env.set_agent_models(models=models)
