@@ -14,8 +14,10 @@ Main features:
 Several demo multi-agent environments are provided for testing:
 ### `Predator-Prey`
 A classical predator-prey environment based on Pybullet.
+
 <img src="docs/images/3preds_1prey.gif" height="200" alt="Predator-Prey"/>
 
 ### `MultiAgent Soccer`
 Soccer environment baed on PyBullet with configurable number of team players.
+
 <img src="docs/images/soccer_2vs2.gif" height="200" alt="Soccer 2 vs 2"/>
