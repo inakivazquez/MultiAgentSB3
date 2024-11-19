@@ -1,6 +1,6 @@
-from ma_sb3.envs.soccer_v4 import SoccerEnv
+from ma_sb3.envs.soccer_v0 import SoccerEnv
 from ma_sb3 import TimeLimitMAEnv
-from ma_sb3.utils import ma_train, ma_evaluate, ma_train2
+from ma_sb3.utils import ma_train, ma_evaluate
 
 from gymnasium.wrappers.time_limit import TimeLimit
 
@@ -15,13 +15,12 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.WARNING, format='%(levelname)s: %(message)s')
 
     train = True
-    train = False
-    red_team_load_previous_model = True
-    blue_team_load_previous_model = True
+    red_team_load_previous_model = False
+    blue_team_load_previous_model = False
 
     n_players_per_team = 2
     single_team = False
-    experiment_name = "independent"
+    experiment_name = "test_1"
     seed = 42
 
     red_team_algo = SAC
@@ -48,11 +47,11 @@ if __name__ == "__main__":
             models_to_load['soccer_blue'] = blue_team_model_path
 
         models_to_train = 'all'
-        models_to_train = ['soccer_blue']
+        #models_to_train = ['soccer_blue']
 
-        trained_models = ma_train2(ma_env, model_algo_map=model_algo_map,
+        trained_models = ma_train(ma_env, model_algo_map=model_algo_map,
                  models_to_train=models_to_train, models_to_load=models_to_load,
-                 total_timesteps_per_model=300_000, training_iterations=1,
+                 total_timesteps_per_model=50_000, training_iterations=5,
                  tb_log_suffix=f"{n_players_per_team}p_{experiment_name}")
 
         ma_env.close()

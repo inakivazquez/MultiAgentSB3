@@ -12,6 +12,10 @@ Main features:
 * `AgentMAEnv`: this is a single-agent Gymnasium environment 'wrapper' that creates the illusion for SB3 to deal with a single agent environment. In a `BaseMAEnv` there are several instances of this class, one per agent to train.
 
 Several demo multi-agent environments are provided for testing:
-* `PredatorPreyMAEnv`: a classical predator-prey environment based on Pybullet.
-<img src="https://github.com/user-attachments/assets/ef6ce57f-e094-4807-b003-bacc72d701ec" height="200" alt="Predator-Prey"/>
+### `Predator-Prey`
+A classical predator-prey environment based on Pybullet.
+<img src="docs/images/3preds_1prey.gif" height="200" alt="Predator-Prey"/>
 
+### `MultiAgent Soccer`
+Soccer environment baed on PyBullet with configurable number of team players.
+<img src="docs/images/soccer_2vs2.gif" height="200" alt="Soccer 2 vs 2"/>

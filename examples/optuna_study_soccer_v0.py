@@ -11,7 +11,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.evaluation import evaluate_policy
 from ma_sb3 import TimeLimitMAEnv
 
-from ma_sb3.envs.soccer_v4 import SoccerEnv
+from ma_sb3.envs.soccer_v0 import SoccerEnv
 
 # Define the hyperparameters to optimize
 hyperparameters = {

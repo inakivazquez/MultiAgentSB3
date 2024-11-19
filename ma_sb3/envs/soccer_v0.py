@@ -9,7 +9,6 @@ import numpy as np
 import pybullet as p
 import pybullet_data
 from gymnasium.spaces import Box
-from pynput import keyboard
 
 from ma_sb3 import AgentMAEnv, BaseMAEnv
 from ma_sb3.envs.soccer_stadium import create_stadium, create_player, create_ball
@@ -101,7 +100,6 @@ class SoccerEnv(BaseMAEnv):
 
         self.pybullet_text_id = None
 
-        #self.key_control(self.pybullet_reds_ids[0])
 
     def step_simulation(self):
         p.stepSimulation()
@@ -454,52 +452,3 @@ class SoccerEnv(BaseMAEnv):
             p.removeUserDebugItem(self.pybullet_text_id)
         self.pybullet_text_id = p.addUserDebugText(text, [0, -4, 2], textColorRGB=[0, 0, 0], textSize=2)
 
-
-    def key_control(self, object_id):
-        # Define the key press handler
-        def on_press(key):
-            try:
-                # Convert key to character
-                k = key.char
-            except AttributeError:
-                k = key.name
-            
-            # Define the force to be applied
-            force_magnitude = 100
-            force = [0, 0, 0]
-            
-            # Check which key is pressed and set the force accordingly
-            if key == keyboard.Key.up:  # Apply force forward
-                force = [0, force_magnitude, 0]
-            elif key == keyboard.Key.down:  # Apply force backward
-                force = [0, -force_magnitude, 0]
-            elif key == keyboard.Key.left:  # Apply force to the left
-                force = [-force_magnitude, 0, 0]
-            elif key == keyboard.Key.right:  # Apply force to the right
-                force = [force_magnitude, 0, 0]
-            else:
-                return
-            
-            # Apply the force to the object
-            p.applyExternalForce(objectUniqueId=object_id, 
-                                linkIndex=-1,  # -1 applies the force to the base
-                                forceObj=force, 
-                                posObj=p.getBasePositionAndOrientation(object_id)[0],  # Apply the force at the object's position
-                                flags=p.WORLD_FRAME)
-        
-        # Create a keyboard listener
-        listener = keyboard.Listener(on_press=on_press)
-        listener.start()
-
-        # Keep the script running to listen for key presses
-        try:
-            while True:
-                p.stepSimulation()
-                # Get the current position of the object
-                pos, _ = p.getBasePositionAndOrientation(object_id)
-                
-                # Print the position with 2 decimal places
-                formatted_pos = [f"{coord:.2f}" for coord in pos]
-                print("Position:", formatted_pos)
-        except KeyboardInterrupt:
-                print("Keyboard interrupt detected. Exiting...")
