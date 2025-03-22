@@ -127,8 +127,6 @@ class SoccerEnv(BaseMAEnv):
     def reset(self, seed=None):
         super().reset(seed=seed)
 
-
-
         limit_spawn_perimeter_x = self.perimeter_side / 2 -1
         limit_spawn_perimeter_y = self.perimeter_side / 4 -1
 
