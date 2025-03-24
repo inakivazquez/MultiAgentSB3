@@ -129,7 +129,7 @@ def ma_train(ma_env, model_algo_map, models_to_train='all', models_to_load=None,
         return models
 
 
-def ma_evaluate(ma_env, models, total_episodes=100):
+def ma_evaluate(ma_env, models, total_episodes=100, verbose=False):
     """
     Evaluates the performance of multiple agents in a multi-agent environment using the given models.
     Args:
@@ -163,6 +163,8 @@ def ma_evaluate(ma_env, models, total_episodes=100):
             # Add the episode rewards to the list of rewards for each agent
             for agent_id, reward in episode_rewards.items():
                 list_episodes_rewards[agent_id].append(reward)
+            if verbose:
+                print(f"Episode {_+1} completed. Rewards: {episode_rewards}")
     
     # Calculate average reward per agent
     average_reward_agent = {agent_id: sum(rewards)/total_episodes for agent_id, rewards in list_episodes_rewards.items()}

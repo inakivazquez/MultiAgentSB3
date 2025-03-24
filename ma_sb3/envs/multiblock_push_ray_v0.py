@@ -51,7 +51,7 @@ def generate_mujoco_xml(num_cubes:int=1):
     xml += f"""
             <body name="block" pos="0 0 0.1">
                 <joint type="free"/>
-                <geom name="geom_block" group="1" type="box" size="0.05 0.05 0.05" rgba="0.9 0.4 0 1" density="1000" friction="0.01 0.01 0.01"/>
+                <geom name="geom_block" group="1" type="box" size="0.05 0.05 0.05" rgba="0.9 0.4 0 1" density="{num_cubes*3000}" friction="0.01 0.01 0.01"/>
             </body>
             <body name="target" pos="0 0 0.1">
                 <geom name="geom_target" type="cylinder" size="0.15 0.1" rgba="0.0 0.8 0.0 0.4" density="0" contype="0" conaffinity="0" />
@@ -157,6 +157,7 @@ class MultiBlockPushRay(MujocoEnv, BaseMAEnv):
             self.setup_raycast(mujoco_cube_id, self.nrays, self.span_angle_degrees)
 
         self.rotation_step_size = 0.1
+        self.sim_steps_per_decission = 5
         self.active_movements = {}  # Track movements per object
 
     def do_simulation(self, ctrl, n_frames):
@@ -174,21 +175,21 @@ class MultiBlockPushRay(MujocoEnv, BaseMAEnv):
             if detected_body_id == self.block_id:
                 block_obs[i*2] = 1
                 block_obs[i*2+2] = normalized_distances[i]
-            # If the detected body is a cube
-            elif detected_body_id in self.mujoco_cube_ids.values():
+            # If the detected body is a cube different from the agent's cube
+            elif detected_body_id in self.mujoco_cube_ids.values() and detected_body_id != mujoco_cube_id:
                 block_obs[i*2+1] = 1
                 block_obs[i*2+2] = normalized_distances[i]
             # For debugging
             if False and detected_body_id != -1:
                 body_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, detected_body_id)
-                print(f"Ray {i} hit {body_name} at {normalized_distances[i]}")
+                print(f"Ray {i} from {agent_id} hit {body_name} at {normalized_distances[i]}")
 
         rdv_cube_to_target, _ = self.relative_distance_vector(mujoco_cube_id, self.target_id)
 
         obs = np.concatenate([block_obs, rdv_cube_to_target[0:2]], dtype=np.float32)
         return obs
 
-    def sync_wait_for_actions_completion(self):
+    def _sync_wait_for_actions_completion(self):
         all_done = False
         while not all_done:
             all_done = True
@@ -196,6 +197,13 @@ class MultiBlockPushRay(MujocoEnv, BaseMAEnv):
                 finished = self.step_move(self.mujoco_cube_ids[agent_id])
                 if not finished:
                     all_done = False
+            # Execute the simulation step for all elements
+            self.do_simulation(self.data.ctrl, self.frame_skip)
+
+    def sync_wait_for_actions_completion(self):
+        for _ in range(self.sim_steps_per_decission): #  simulation steps
+            for agent_id in self.agents:
+                self.step_move(self.mujoco_cube_ids[agent_id])
             # Execute the simulation step for all elements
             self.do_simulation(self.data.ctrl, self.frame_skip)
 
@@ -338,16 +346,14 @@ class MultiBlockPushRay(MujocoEnv, BaseMAEnv):
         
         yaw_current = self.data.qpos[qpos_yaw]
         yaw_target = yaw_current + rotation
-        step_direction = np.sign(rotation)
-        remaining_rotation = abs(rotation)
         current_speed = self.agent_speed * speed
-        previous_pos = self.data.xpos[mujoco_cube_id]
+        previous_pos = self.data.xpos[mujoco_cube_id].copy()
         
         self.active_movements[mujoco_cube_id] = {
             "yaw_current": yaw_current,
             "yaw_target": yaw_target,
-            "step_direction": step_direction,
-            "remaining_rotation": remaining_rotation,
+            "remaining_steps": self.sim_steps_per_decission,
+            "step_size": rotation/self.sim_steps_per_decission,
             "current_speed": current_speed,
             "distance_done": 0,
             "previous_pos": previous_pos,
@@ -363,7 +369,7 @@ class MultiBlockPushRay(MujocoEnv, BaseMAEnv):
             return True  # No movement for this object
         
         movement = self.active_movements[mujoco_cube_id]
-        if movement["remaining_rotation"] <= 0:
+        if movement["remaining_steps"] <= 0:
             self.active_movements[mujoco_cube_id]["finished"] = True
             return True
 
@@ -373,8 +379,11 @@ class MultiBlockPushRay(MujocoEnv, BaseMAEnv):
         qpos_yaw = self.model.jnt_qposadr[idx_yaw]
 
         # Determine step size
-        step_size = min(self.rotation_step_size, movement["remaining_rotation"])
-        movement["yaw_current"] += step_size * movement["step_direction"]
+        #step_size = min(self.rotation_step_size, movement["remaining_rotation"])
+        step_size = movement["step_size"]
+        movement["remaining_steps"] -= 1
+
+        movement["yaw_current"] += step_size
         self.data.qpos[qpos_yaw] = movement["yaw_current"]
 
         # Compute new velocity
@@ -388,12 +397,13 @@ class MultiBlockPushRay(MujocoEnv, BaseMAEnv):
         # Update distance done
         current_pos = self.data.xpos[mujoco_cube_id]
         movement["distance_done"] += np.linalg.norm(current_pos - movement["previous_pos"])
-        movement["previous_pos"] = current_pos
+        movement["previous_pos"] = current_pos.copy()
 
-        # Update remaining rotation
-        movement["remaining_rotation"] -= step_size
-        movement["finished"] = False
-        return False
+        if movement["remaining_steps"] <= 0:
+            self.active_movements[mujoco_cube_id]["finished"] = True
+            return True
+        else:
+            return False
 
     def distance_xy(self, body_id_1, body_id_2):
         """
