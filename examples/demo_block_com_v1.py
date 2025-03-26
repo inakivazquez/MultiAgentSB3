@@ -1,4 +1,4 @@
-from ma_sb3.envs.multiblock_push_ray_v0 import MultiBlockPushRay
+from ma_sb3.envs.multiblock_push_ray_com_v1 import MultiBlockPushRayCom
 from ma_sb3 import TimeLimitMAEnv
 from ma_sb3.utils import ma_train, ma_evaluate
 
@@ -13,23 +13,34 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.WARNING, format='%(levelname)s: %(message)s')
 
     train = True
-    cube_load_previous_model = False
+    cube_load_previous_model = True
 
-    num_cubes = 1
-    experiment_name = "11_180"
+    num_cubes = 8
+    num_blocks = 3
+    block_density = 3000
+    nrays = 20
+    span_angle_degrees = 360
+    experiment_name = f"comm_{num_cubes}a_{num_blocks}b_{nrays}r_{span_angle_degrees}_den{block_density}"
     seed = 42
 
     cube_algo = PPO
 
     cube_algo_params = {'policy': "MlpPolicy", 'seed': seed, 'verbose': 1, 'tensorboard_log': "./logs"}
 
-    cube_model_path = f"policies/model_cubes_{num_cubes}p_{cube_algo.__name__}_{experiment_name}"
-    #cube_model_path = f"policies/model_cubes_3p_{cube_algo.__name__}_{experiment_name}"
+    #cube_algo_params = {'policy': "MlpPolicy", 'seed': seed, 'verbose': 1, 'tensorboard_log': "./logs", 
+    #                    'policy_kwargs':{'net_arch':[256, 256]}}
 
-    env_params = {'num_cubes': num_cubes, 'nrays': 11, 'span_angle_degrees': 180}
+    cube_model_path = f"policies/model_cubes_{cube_algo.__name__}_{experiment_name}"
+    cube_model_path = "policies/model_cubes_PPO_comm_2a_1b_20r_360_den2000"
+
+    env_params = {'num_cubes': num_cubes,
+                  'num_blocks': num_blocks,
+                  'nrays': nrays,
+                  'span_angle_degrees': span_angle_degrees,
+                  'block_density': block_density}
 
     if train:
-        ma_env = MultiBlockPushRay(**env_params, render_mode=None)
+        ma_env = MultiBlockPushRayCom(**env_params, render_mode=None)
         ma_env = TimeLimitMAEnv(ma_env, max_episode_steps=500)
 
         model_algo_map = {'cube': (cube_algo, cube_algo_params)}
@@ -42,8 +53,8 @@ if __name__ == "__main__":
 
         trained_models = ma_train(ma_env, model_algo_map=model_algo_map,
                  models_to_train=models_to_train, models_to_load=models_to_load,
-                 total_timesteps_per_model=500_000, training_iterations=5,
-                 tb_log_suffix=f"{num_cubes}p_{experiment_name}")
+                 total_timesteps_per_model=2_000_000, training_iterations=20,
+                 tb_log_suffix=f"{experiment_name}")
 
         ma_env.close()
 
@@ -54,7 +65,7 @@ if __name__ == "__main__":
     # TESTING SECTION
     render_mode = 'human'
     record_video_file = None
-    ma_env = MultiBlockPushRay(**env_params, render_mode=render_mode)
+    ma_env = MultiBlockPushRayCom(**env_params, render_mode=render_mode)
     ma_env = TimeLimitMAEnv(ma_env, max_episode_steps=500)
 
     model_cube = cube_algo.load(cube_model_path)

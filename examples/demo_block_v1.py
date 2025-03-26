@@ -1,4 +1,4 @@
-from ma_sb3.envs.multiblock_push_ray_v0 import MultiBlockPushRay
+from ma_sb3.envs.multiblock_push_ray_v1 import MultiBlockPushRay
 from ma_sb3 import TimeLimitMAEnv
 from ma_sb3.utils import ma_train, ma_evaluate
 
@@ -12,21 +12,29 @@ if __name__ == "__main__":
 
     logging.basicConfig(level=logging.WARNING, format='%(levelname)s: %(message)s')
 
-    train = True
-    cube_load_previous_model = False
+    train = False
+    cube_load_previous_model = True
 
-    num_cubes = 1
-    experiment_name = "11_180"
+    num_cubes = 4
+    num_blocks = 1
+    block_density = 2000
+    nrays = 20
+    span_angle_degrees = 360
+    experiment_name = f"raycorrected_{num_cubes}a_{num_blocks}b_{nrays}r_{span_angle_degrees}_den{block_density}"
     seed = 42
 
     cube_algo = PPO
 
     cube_algo_params = {'policy': "MlpPolicy", 'seed': seed, 'verbose': 1, 'tensorboard_log': "./logs"}
 
-    cube_model_path = f"policies/model_cubes_{num_cubes}p_{cube_algo.__name__}_{experiment_name}"
-    #cube_model_path = f"policies/model_cubes_3p_{cube_algo.__name__}_{experiment_name}"
+    cube_model_path = f"policies/model_cubes_{cube_algo.__name__}_{experiment_name}"
+    #cube_model_path = "policies_final/model_cubes_4p_PPO_3b_20_360_den3000"
 
-    env_params = {'num_cubes': num_cubes, 'nrays': 11, 'span_angle_degrees': 180}
+    env_params = {'num_cubes': num_cubes,
+                  'num_blocks': num_blocks,
+                  'nrays': nrays,
+                  'span_angle_degrees': span_angle_degrees,
+                  'block_density': block_density}
 
     if train:
         ma_env = MultiBlockPushRay(**env_params, render_mode=None)
@@ -43,7 +51,7 @@ if __name__ == "__main__":
         trained_models = ma_train(ma_env, model_algo_map=model_algo_map,
                  models_to_train=models_to_train, models_to_load=models_to_load,
                  total_timesteps_per_model=500_000, training_iterations=5,
-                 tb_log_suffix=f"{num_cubes}p_{experiment_name}")
+                 tb_log_suffix=f"{experiment_name}")
 
         ma_env.close()
 

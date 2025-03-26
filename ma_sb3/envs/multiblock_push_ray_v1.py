@@ -12,7 +12,7 @@ import os
 from ma_sb3 import AgentMAEnv, BaseMAEnv
 
 # Generate XML for MuJoCo
-def generate_mujoco_xml(num_cubes:int=1):
+def generate_mujoco_xml(num_cubes:int=1, num_blocks:int=1, block_density:float=2000):
 
     xml = f"""<mujoco model="swarm_cubes">
     <option timestep="0.01" gravity="0 0 -9.81"/>
@@ -48,11 +48,15 @@ def generate_mujoco_xml(num_cubes:int=1):
             </body>            
         </body>"""
 
-    xml += f"""
-            <body name="block" pos="0 0 0.1">
-                <joint type="free"/>
-                <geom name="geom_block" group="1" type="box" size="0.05 0.05 0.05" rgba="0.9 0.4 0 1" density="{num_cubes*1000}" friction="0.01 0.01 0.01"/>
-            </body>
+    for i in range(num_blocks):
+        x, y = 0, 0
+        xml += f"""
+                <body name="block_{i}" pos="0 0 0.1">
+                    <joint type="free"/>
+                    <geom name="geom_block_{i}" group="1" type="box" size="0.05 0.05 0.05" rgba="0.9 0.4 0 1" density="{block_density}" friction="0.01 0.01 0.01"/>
+                </body>"""
+
+    xml += f"""        
             <body name="target" pos="0 0 0.1">
                 <geom name="geom_target" type="cylinder" size="0.15 0.1" rgba="0.0 0.8 0.0 0.4" density="0" contype="0" conaffinity="0" />
             </body>
@@ -79,7 +83,7 @@ class MultiBlockPushRay(MujocoEnv, BaseMAEnv):
         data = mujoco.MjData(model)
         return model, data
 
-    def __init__(self, num_cubes = 2, agent_speed=0.5, nrays=5, span_angle_degrees=180, **kwargs):
+    def __init__(self, num_cubes=2, num_blocks=1, agent_speed=0.5, nrays=5, span_angle_degrees=180, block_density=2000, **kwargs):
 
         default_camera_config = {
             "distance": 2.5,
@@ -91,7 +95,7 @@ class MultiBlockPushRay(MujocoEnv, BaseMAEnv):
         screen_width = screen_height = 800
 
         # Overriden initialize_simulation function will use this XML string to create the model instead of model_path 
-        self.xml_model = generate_mujoco_xml(num_cubes=num_cubes)
+        self.xml_model = generate_mujoco_xml(num_cubes=num_cubes, num_blocks=num_blocks, block_density=block_density)
 
         MujocoEnv.__init__(
             self,
@@ -129,8 +133,12 @@ class MultiBlockPushRay(MujocoEnv, BaseMAEnv):
                             )
 
         self.agent_speed = agent_speed
+        self.num_blocks = num_blocks
 
-        self.block_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "block")
+        self.mujoco_block_ids = []
+        for i in range(num_blocks):
+            self.mujoco_block_ids.append(mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, f"block_{i}"))
+
         self.target_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "target")
 
         self.mujoco_cube_ids = {}
@@ -159,6 +167,7 @@ class MultiBlockPushRay(MujocoEnv, BaseMAEnv):
         self.rotation_step_size = 0.1
         self.sim_steps_per_decission = 5
         self.active_movements = {}  # Track movements per object
+        self.pending_block_ids = self.mujoco_block_ids.copy()  # Track blocks that are pending to be moved to the target
 
     def do_simulation(self, ctrl, n_frames):
         value = super().do_simulation(ctrl, n_frames)
@@ -169,23 +178,24 @@ class MultiBlockPushRay(MujocoEnv, BaseMAEnv):
     def get_observation(self, agent_id):
         mujoco_cube_id = self.mujoco_cube_ids[agent_id]
         detected_body_ids, normalized_distances = self.perform_raycast(mujoco_cube_id)
-        block_obs = [0, 0, 0] * self.nrays
+        block_obs = np.zeros((self.nrays, 3), dtype=np.float32)
         for i, detected_body_id in enumerate(detected_body_ids):
             # If the detected body is the block
-            if detected_body_id == self.block_id:
-                block_obs[i*2] = 1
-                block_obs[i*2+2] = normalized_distances[i]
+            if detected_body_id in self.pending_block_ids:
+                block_obs[i][0] = 1 # Flag for block detected
+                block_obs[i][2] = normalized_distances[i]
             # If the detected body is a cube different from the agent's cube
             elif detected_body_id in self.mujoco_cube_ids.values() and detected_body_id != mujoco_cube_id:
-                block_obs[i*2+1] = 1
-                block_obs[i*2+2] = normalized_distances[i]
+                block_obs[i][1] = 1 # Flag for cube detected
+                block_obs[i][2] = normalized_distances[i]
             # For debugging
             if False and detected_body_id != -1:
                 body_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, detected_body_id)
                 print(f"Ray {i} from {agent_id} hit {body_name} at {normalized_distances[i]}")
 
+        block_obs = block_obs.flatten()
         rdv_cube_to_target, _ = self.relative_distance_vector(mujoco_cube_id, self.target_id)
-
+    
         obs = np.concatenate([block_obs, rdv_cube_to_target[0:2]], dtype=np.float32)
         return obs
 
@@ -217,34 +227,58 @@ class MultiBlockPushRay(MujocoEnv, BaseMAEnv):
         for agent_id in self.agents:
             rewards[agent_id] = 0
 
-        # Check if the block is in the target
-        distance_block_target = self.distance_xy(self.block_id, self.target_id )
-        if distance_block_target < 0.1 and distance_block_target < self.best_distance:
-            print("Target!")
+        # Check if pending block is in the target
+        for block_id in self.pending_block_ids:
+            distance_block_target = self.distance_xy(block_id, self.target_id)
+            if distance_block_target < 0.1 and distance_block_target < self.best_distance: 
+                print("Target!")
+                self.dissapear_body(block_id)
+                self.pending_block_ids.remove(block_id)
+                closest_agent_id = None
+                closest_distance = 1000
+                for agent_id in self.agents:
+                    rewards[agent_id] += 100 / self.num_blocks
+                    distance_to_block = self.distance_xy(self.mujoco_cube_ids[agent_id], block_id)
+                    if distance_to_block < closest_distance:
+                        closest_distance = distance_to_block
+                        closest_agent_id = agent_id
+                # Individual reward to the agent that pushed the block
+                rewards[closest_agent_id] += 50
+
+        if len(self.pending_block_ids) == 0:
+            print("All blocks in target!")
             terminated = True
             for agent_id in self.agents:
-                rewards[agent_id] += 100
+                rewards[agent_id] += 100 # Bonus for finishing the task
         else:
-            previous_best_distance = self.best_distance
             # Compute individual rewards for each agent
+            # Calculate the average distance of all blocks to the target
+            previous_best_distance = self.best_distance
+            total_distance_to_target = 0
+            for block_id in self.pending_block_ids:
+                total_distance_to_target += self.distance_xy(block_id, self.target_id)
+            average_distance_to_target = total_distance_to_target / len(self.pending_block_ids)
+
             for agent_id in self.agents:
                 mujoco_cube_id = self.mujoco_cube_ids[agent_id]
-                distance_agent_block = self.distance_xy(mujoco_cube_id, self.block_id )
                 # Individual reward for each agent based on distances except the first state of the episode
                 if self.active_movements.get(mujoco_cube_id) is not None:
                     rewards[agent_id] += -self.active_movements[mujoco_cube_id]["distance_done"]
-                rewards[agent_id] += -distance_agent_block
+                rewards[agent_id] += -average_distance_to_target
 
                 # Update best distance achieved by any agent
-                if distance_block_target < self.best_distance:
-                    self.best_distance = distance_block_target
+                if average_distance_to_target < self.best_distance:
+                    self.best_distance = average_distance_to_target
 
             # After individual rewards, add reward based on task (reduced best distance achieved)
             for agent_id in self.agents:
                 rewards[agent_id] += (previous_best_distance - self.best_distance)
 
-
         return rewards, terminated, truncated, infos
+
+    def dissapear_body(self, body_id):
+        block_qpos_addr = self.model.jnt_qposadr[self.model.body_jntadr[body_id]]
+        self.data.qpos[block_qpos_addr:block_qpos_addr+3] = [0,0,-1000]
 
     def reset(self, seed=None):
         super().reset(seed=seed)
@@ -252,11 +286,14 @@ class MultiBlockPushRay(MujocoEnv, BaseMAEnv):
         return obs, info
 
     def reset_model(self):
-        block_qpos_addr = self.model.jnt_qposadr[self.model.body_jntadr[self.block_id]]
-        self.data.qpos[block_qpos_addr:block_qpos_addr+3] = [random.uniform(-0.5, 0.5), random.uniform(-0.5, 0.5), 0.1]
+        for block_id in self.mujoco_block_ids:
+            margin = 0.5
+            block_qpos_addr = self.model.jnt_qposadr[self.model.body_jntadr[block_id]]
+            self.data.qpos[block_qpos_addr:block_qpos_addr+3] = [random.uniform(-margin,+margin), random.uniform(-margin, +margin), 0.1]
+        self.pending_block_ids = self.mujoco_block_ids.copy()
 
         # As the joint is slide, the qpos is relative to the original location
-        for cube_id in range(len(self.mujoco_cube_ids)):
+        for cube_id in self.mujoco_cube_ids.values():
             cube_qpos_addr = self.model.jnt_qposadr[self.model.body_jntadr[cube_id]]
             self.data.qpos[cube_qpos_addr:cube_qpos_addr+3] = [random.uniform(-0.5, 0.5), random.uniform(-0.5, 0.5), 0.1]
 
@@ -268,7 +305,12 @@ class MultiBlockPushRay(MujocoEnv, BaseMAEnv):
             mujoco_id = self.mujoco_cube_ids[agent_id]        
             self.setup_raycast(mujoco_id, self.nrays, self.span_angle_degrees)
 
-        self.best_distance = self.distance_xy(self.block_id, self.target_id)
+        total_distance_to_blocks = 0
+        for block_id in self.mujoco_block_ids:
+            total_distance_to_blocks += self.distance_xy(block_id, self.target_id)
+        average_distance_to_blocks = total_distance_to_blocks / self.num_blocks
+
+        self.best_distance = average_distance_to_blocks
 
     def step_agent(self, agent_id:int, action: ActType) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
         mujoco_cube_id = self.mujoco_cube_ids[agent_id]   
