@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Any
 
 import gymnasium as gym
-from gymnasium.core import ObsType, ActType, SupportsFloat, RenderFrame
+from gymnasium.core import ObsType, ActType, SupportsFloat
 from gymnasium.envs.mujoco import MujocoEnv
 import mujoco
 import numpy as np
@@ -11,62 +11,7 @@ import os
 
 from ma_sb3 import AgentMAEnv, BaseMAEnv
 
-# Generate XML for MuJoCo
-def generate_mujoco_xml(num_cubes:int=1, num_blocks:int=1, block_density:float=2000):
-
-    xml = f"""<mujoco model="swarm_cubes">
-    <option timestep="0.01" gravity="0 0 -9.81"/>
-    <visual>
-        <headlight diffuse="0.8 0.8 0.8" ambient="0.8 0.8 0.8" specular="0 0 0"/>
-        <rgba haze="0.15 0.25 0.35 1"/>
-        <global azimuth="120" elevation="-20"/>
-    </visual>
-    <asset>
-        <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>
-        <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.9 0.9 0.9" rgb2="0.7 0.7 0.7"
-        markrgb="0.8 0.8 0.8" width="300" height="300"/>
-        <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.05"/>
-    </asset>
-    <worldbody>
-        <geom name="floor" size="0 0 0.05" type="plane" material="groundplane" friction="0.01 0.01 0.01"/>"""
-
-    # Generate random cubes
-    for i in range(num_cubes):
-        # In the case of joint slide, the position is relative to the parent body
-        # So we need to set the position of the parent body to 0, 0, 0
-        x, y = 0, 0
-        r, g, b = np.random.rand(3)  # Random color
-
-        xml += f"""
-        <body name="cube_{i}" pos="{x} {y} 0.01">
-            <geom name="geom_cube_{i}" group="1" type="box" size="0.01 0.01 0.01" rgba="{r} {g} {b} 1" density="5000" friction="0.01 0.01 0.01"/>
-            <joint name="cube_{i}_slide_x" type="slide" axis="1 0 0"/> <!-- Move along X -->
-            <joint name="cube_{i}_slide_y" type="slide" axis="0 1 0"/> <!-- Move along Y -->
-            <joint name="cube_{i}_yaw" type="hinge" axis="0 0 1"/>  <!-- Rotate around Z -->
-            <body name="direction_indicator_{i}" pos="0.01 0 0">
-                <geom name="indicator_{i}" type="cylinder" size="0.003 0.00001" rgba="1 1 1 1" euler="0 90 0" density="0"/>
-            </body>            
-        </body>"""
-
-    for i in range(num_blocks):
-        x, y = 0, 0
-        xml += f"""
-                <body name="block_{i}" pos="0 0 0.1">
-                    <joint type="free"/>
-                    <geom name="geom_block_{i}" group="1" type="box" size="0.05 0.05 0.05" rgba="0.9 0.4 0 1" density="{block_density}" friction="0.02 0.01 0.01"/>
-                </body>"""
-
-    xml += f"""        
-            <body name="target" pos="0 0 0.1">
-                <geom name="geom_target" type="cylinder" size="0.15 0.1" rgba="0.0 0.8 0.0 0.4" density="0" contype="0" conaffinity="0" />
-            </body>
-        </worldbody>
-    </mujoco>"""
-    
-    return xml
-
-
-class MultiBlockPushRayCom(MujocoEnv, BaseMAEnv):
+class BaseSwarmEnv(MujocoEnv, BaseMAEnv):
 
     metadata = {
         "render_modes": ["human", "rgb_array", "depth_array", "rgbd_tuple",],
@@ -83,7 +28,7 @@ class MultiBlockPushRayCom(MujocoEnv, BaseMAEnv):
         data = mujoco.MjData(model)
         return model, data
 
-    def __init__(self, num_cubes=2, num_blocks=1, agent_speed=0.5, nrays=5, span_angle_degrees=180, block_density=2000, communication_items=0, **kwargs):
+    def __init__(self, num_cubes=2, agent_speed=0.5, forward_only = True, nrays=5, span_angle_degrees=180, communication_items=0, **kwargs):
 
         default_camera_config = {
             "distance": 2.5,
@@ -95,7 +40,7 @@ class MultiBlockPushRayCom(MujocoEnv, BaseMAEnv):
         screen_width = screen_height = 800
 
         # Overriden initialize_simulation function will use this XML string to create the model instead of model_path 
-        self.xml_model = generate_mujoco_xml(num_cubes=num_cubes, num_blocks=num_blocks, block_density=block_density)
+        self.xml_model = self.generate_mujoco_xml(num_cubes=num_cubes)
 
         MujocoEnv.__init__(
             self,
@@ -121,16 +66,18 @@ class MultiBlockPushRayCom(MujocoEnv, BaseMAEnv):
         self.nrays = nrays
         self.span_angle_degrees = span_angle_degrees
         self.communication_items = communication_items
+        self.forward_only = forward_only
 
         for i in range(num_cubes):
             # Observation space
             observation_space = gym.spaces.Box(
-                low=np.array(([0, 0, 0] + [-1] * self.communication_items) * self.nrays + [-2]*2, dtype=np.float32),
-                high=np.array(([1, 1, 1] + [1] * self.communication_items) * self.nrays + [+2]*2, dtype=np.float32),
-                shape=((3+self.communication_items)*self.nrays + 2,))
+                low=np.array(([0, 0, 0] + [-1] * self.communication_items) * self.nrays, dtype=np.float32),
+                high=np.array(([1, 1, 1] + [1] * self.communication_items) * self.nrays, dtype=np.float32),
+                shape=((3+self.communication_items)*self.nrays,))
             # Action space
+            low_limit = 0 if self.forward_only else -1
             action_space = gym.spaces.Box(
-                low=np.array([-1]*(2+self.communication_items), dtype=np.float32),
+                low=np.array([low_limit]*2 + [-1] * self.communication_items, dtype=np.float32),
                 high=np.array([+1]*(2+self.communication_items) , dtype=np.float32),
                 shape=(2+self.communication_items,))
             
@@ -141,13 +88,6 @@ class MultiBlockPushRayCom(MujocoEnv, BaseMAEnv):
                             )
 
         self.agent_speed = agent_speed
-        self.num_blocks = num_blocks
-
-        self.mujoco_block_ids = []
-        for i in range(num_blocks):
-            self.mujoco_block_ids.append(mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, f"block_{i}"))
-
-        self.target_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "target")
 
         self.mujoco_cube_ids = {}
         self.mujoco_cube_indicator_ids = {}
@@ -175,7 +115,7 @@ class MultiBlockPushRayCom(MujocoEnv, BaseMAEnv):
         self.rotation_step_size = 0.1
         self.sim_steps_per_decission = 5
         self.active_movements = {}  # Track movements per object
-        self.pending_block_ids = self.mujoco_block_ids.copy()  # Track blocks that are pending to be moved to the target
+
         # Initialize the agents public communication message
         self.agent_comm_messages = {mujoco_cube_id: [0]*self.communication_items for mujoco_cube_id in self.mujoco_cube_ids.values()}
 
@@ -188,39 +128,22 @@ class MultiBlockPushRayCom(MujocoEnv, BaseMAEnv):
     def get_observation(self, agent_id):
         mujoco_cube_id = self.mujoco_cube_ids[agent_id]
         detected_body_ids, normalized_distances = self.perform_raycast(mujoco_cube_id)
-        block_obs = np.zeros((self.nrays, 3+self.communication_items), dtype=np.float32)
+        ray_obs = np.zeros((self.nrays, 3+self.communication_items), dtype=np.float32)
         for i, detected_body_id in enumerate(detected_body_ids):
-            # If the detected body is the block
-            if detected_body_id in self.pending_block_ids:
-                block_obs[i][0] = 1 # Flag for block detected
-                block_obs[i][2] = normalized_distances[i]
             # If the detected body is a cube different from the agent's cube
-            elif detected_body_id in self.mujoco_cube_ids.values() and detected_body_id != mujoco_cube_id:
-                block_obs[i][1] = 1 # Flag for cube detected
-                block_obs[i][2] = normalized_distances[i]
+            if detected_body_id in self.mujoco_cube_ids.values() and detected_body_id != mujoco_cube_id:
+                ray_obs[i][1] = 1 # Flag for cube detected
+                ray_obs[i][2] = normalized_distances[i]
                 if self.communication_items > 0:
-                    block_obs[i][3:3+self.communication_items] = self.agent_comm_messages[detected_body_id] # Communication message from the agent
+                    ray_obs[i][3:3+self.communication_items] = self.agent_comm_messages[detected_body_id] # Communication message from the agent
             # For debugging
-            if False and detected_body_id != -1:
+            if False and detected_body_id != -1 and detected_body_id != mujoco_cube_id:
                 body_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, detected_body_id)
                 print(f"Ray {i} from {agent_id} hit {body_name} at {normalized_distances[i]}")
 
-        block_obs = block_obs.flatten()
-        rdv_cube_to_target, _ = self.relative_distance_vector(mujoco_cube_id, self.target_id)
-
-        obs = np.concatenate([block_obs, rdv_cube_to_target[0:2]], dtype=np.float32)
+        ray_obs = ray_obs.flatten()
+        obs = ray_obs.copy()
         return obs
-
-    def _sync_wait_for_actions_completion(self):
-        all_done = False
-        while not all_done:
-            all_done = True
-            for agent_id in self.agents:
-                finished = self.step_move(self.mujoco_cube_ids[agent_id])
-                if not finished:
-                    all_done = False
-            # Execute the simulation step for all elements
-            self.do_simulation(self.data.ctrl, self.frame_skip)
 
     def sync_wait_for_actions_completion(self):
         for _ in range(self.sim_steps_per_decission): #  simulation steps
@@ -230,68 +153,11 @@ class MultiBlockPushRayCom(MujocoEnv, BaseMAEnv):
             self.do_simulation(self.data.ctrl, self.frame_skip)
 
     def get_env_state_results(self):
-        truncated = False
-        rewards = {}
-        infos = {}   
-        terminated = False
-
-        # Initialize rewards dictionary
-        for agent_id in self.agents:
-            rewards[agent_id] = 0
-
-        # Check if pending block is in the target
-        for block_id in self.pending_block_ids:
-            distance_block_target = self.distance_xy(block_id, self.target_id)
-            if distance_block_target < 0.1 and distance_block_target < self.best_distance: 
-                print("Target!")
-                self.dissapear_body(block_id)
-                self.pending_block_ids.remove(block_id)
-                closest_agent_id = None
-                closest_distance = 1000
-                for agent_id in self.agents:
-                    rewards[agent_id] += 40 / self.num_blocks
-                    distance_to_block = self.distance_xy(self.mujoco_cube_ids[agent_id], block_id)
-                    if distance_to_block < closest_distance:
-                        closest_distance = distance_to_block
-                        closest_agent_id = agent_id
-                # Individual reward to the agent that pushed the block
-                rewards[closest_agent_id] += 20
-
-        if len(self.pending_block_ids) == 0:
-            print("All blocks in target!")
-            terminated = True
-            for agent_id in self.agents:
-                rewards[agent_id] += 50 # Bonus for finishing the task
-        else:
-            # Compute individual rewards for each agent
-            # Calculate the average distance of all blocks to the target
-            previous_best_distance = self.best_distance
-            total_distance_to_target = 0
-            for block_id in self.pending_block_ids:
-                total_distance_to_target += self.distance_xy(block_id, self.target_id)
-            average_distance_to_target = total_distance_to_target / len(self.pending_block_ids)
-
-            for agent_id in self.agents:
-                mujoco_cube_id = self.mujoco_cube_ids[agent_id]
-                # Individual reward for each agent based on distances except the first state of the episode
-                if self.active_movements.get(mujoco_cube_id) is not None:
-                    rewards[agent_id] += -self.active_movements[mujoco_cube_id]["distance_done"]
-                    pass
-                #rewards[agent_id] += -average_distance_to_target
-
-                # Update best distance achieved by any agent
-                if average_distance_to_target < self.best_distance:
-                    self.best_distance = average_distance_to_target
-
-            # After individual rewards, add reward based on task (reduced best distance achieved)
-            for agent_id in self.agents:
-                rewards[agent_id] += (previous_best_distance - self.best_distance)*100
-
-        return rewards, terminated, truncated, infos
+        raise NotImplementedError
 
     def dissapear_body(self, body_id):
-        block_qpos_addr = self.model.jnt_qposadr[self.model.body_jntadr[body_id]]
-        self.data.qpos[block_qpos_addr:block_qpos_addr+3] = [0,0,-1000]
+        body_qpos_addr = self.model.jnt_qposadr[self.model.body_jntadr[body_id]]
+        self.data.qpos[body_qpos_addr:body_qpos_addr+3] = [0,0,-1000]
 
     def reset(self, seed=None):
         super().reset(seed=seed)
@@ -302,15 +168,11 @@ class MultiBlockPushRayCom(MujocoEnv, BaseMAEnv):
         margin = 0.5
         random_pos = lambda: random.choice([random.uniform(-margin, -0.2), random.uniform(0.2, margin)])
 
-        for block_id in self.mujoco_block_ids:
-            block_qpos_addr = self.model.jnt_qposadr[self.model.body_jntadr[block_id]]
-            self.data.qpos[block_qpos_addr:block_qpos_addr+3] = [random_pos(), random_pos(), 0.1]
-        self.pending_block_ids = self.mujoco_block_ids.copy()
-
+        # Spawn the cubes in random positions
         # As the joint is slide, the qpos is relative to the original location
         for cube_id in self.mujoco_cube_ids.values():
             cube_qpos_addr = self.model.jnt_qposadr[self.model.body_jntadr[cube_id]]
-            self.data.qpos[cube_qpos_addr:cube_qpos_addr+3] = [random.uniform(-0.5, 0.5), random.uniform(-0.5, 0.5), 0.1]
+            self.data.qpos[cube_qpos_addr:cube_qpos_addr+3] = [random_pos(), random_pos(), 0.1]
 
         # Necessary to call this function to update the positions before computation
         self.do_simulation(self.data.ctrl, self.frame_skip)
@@ -319,13 +181,6 @@ class MultiBlockPushRayCom(MujocoEnv, BaseMAEnv):
         for agent_id in self.agents:
             mujoco_id = self.mujoco_cube_ids[agent_id]        
             self.setup_raycast(mujoco_id, self.nrays, self.span_angle_degrees)
-
-        total_distance_to_blocks = 0
-        for block_id in self.mujoco_block_ids:
-            total_distance_to_blocks += self.distance_xy(block_id, self.target_id)
-        average_distance_to_blocks = total_distance_to_blocks / self.num_blocks
-
-        self.best_distance = average_distance_to_blocks
 
         # Initialize the agents public communication message
         self.agent_comm_messages = {mujoco_cube_id: [0]*self.communication_items for mujoco_cube_id in self.mujoco_cube_ids.values()}
@@ -357,7 +212,7 @@ class MultiBlockPushRayCom(MujocoEnv, BaseMAEnv):
 
         nrays = self.nrays
         rot_mats = self.raycast_rot_mats[mujoco_cube_id]
-        geomgroup = np.array([0, 1, 0, 0, 0, 0], dtype=np.uint8)  # Detect group 1 (block)
+        geomgroup = np.array([0, 1, 0, 0, 0, 0], dtype=np.uint8)  # Detect group 1
         flg_static = 1 # Include static geoms
         bodyexclude = 0 # Exclude no bodies
 
@@ -411,12 +266,14 @@ class MultiBlockPushRayCom(MujocoEnv, BaseMAEnv):
         previous_pos = self.data.xpos[mujoco_cube_id].copy()
         
         self.active_movements[mujoco_cube_id] = {
+            "yaw_original": yaw_current,
             "yaw_current": yaw_current,
             "yaw_target": yaw_target,
             "remaining_steps": self.sim_steps_per_decission,
             "step_size": rotation/self.sim_steps_per_decission,
             "current_speed": current_speed,
             "distance_done": 0,
+            "rotation_done": 0,
             "previous_pos": previous_pos,
             "finished": False
         }
@@ -459,6 +316,7 @@ class MultiBlockPushRayCom(MujocoEnv, BaseMAEnv):
         current_pos = self.data.xpos[mujoco_cube_id]
         movement["distance_done"] += np.linalg.norm(current_pos - movement["previous_pos"])
         movement["previous_pos"] = current_pos.copy()
+        movement["rotation_done"] = abs(movement["yaw_current"] - movement["yaw_original"])
 
         if movement["remaining_steps"] <= 0:
             self.active_movements[mujoco_cube_id]["finished"] = True
@@ -537,3 +395,46 @@ class MultiBlockPushRayCom(MujocoEnv, BaseMAEnv):
         yaw_difference = (yaw_difference + np.pi) % (2 * np.pi) - np.pi
 
         return local_distance_vector, yaw_difference
+
+    # Generate XML for MuJoCo
+    def generate_mujoco_xml(self, num_cubes:int=1):
+
+        xml = f"""<mujoco model="swarm_cubes">
+        <option timestep="0.01" gravity="0 0 -9.81"/>
+        <visual>
+            <headlight diffuse="0.8 0.8 0.8" ambient="0.8 0.8 0.8" specular="0 0 0"/>
+            <rgba haze="0.15 0.25 0.35 1"/>
+            <global azimuth="120" elevation="-20"/>
+        </visual>
+        <asset>
+            <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>
+            <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.9 0.9 0.9" rgb2="0.7 0.7 0.7"
+            markrgb="0.8 0.8 0.8" width="300" height="300"/>
+            <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.05"/>
+        </asset>
+        <worldbody>
+            <geom name="floor" size="0 0 0.05" type="plane" material="groundplane" friction="0.01 0.01 0.01"/>"""
+
+        # Generate random cubes
+        for i in range(num_cubes):
+            # In the case of joint slide, the position is relative to the parent body
+            # So we need to set the position of the parent body to 0, 0, 0
+            x, y = 0, 0
+            r, g, b = np.random.rand(3)  # Random color
+
+            xml += f"""
+            <body name="cube_{i}" pos="{x} {y} 0.01">
+                <geom name="geom_cube_{i}" group="1" type="box" size="0.01 0.01 0.01" rgba="{r} {g} {b} 1" density="5000" friction="0.01 0.01 0.01"/>
+                <joint name="cube_{i}_slide_x" type="slide" axis="1 0 0"/> <!-- Move along X -->
+                <joint name="cube_{i}_slide_y" type="slide" axis="0 1 0"/> <!-- Move along Y -->
+                <joint name="cube_{i}_yaw" type="hinge" axis="0 0 1"/>  <!-- Rotate around Z -->
+                <body name="direction_indicator_{i}" pos="0.01 0 0">
+                    <geom name="indicator_{i}" type="cylinder" size="0.003 0.00001" rgba="1 1 1 1" euler="0 90 0" density="0"/>
+                </body>            
+            </body>"""
+
+        xml += f"""        
+            </worldbody>
+        </mujoco>"""
+        
+        return xml
