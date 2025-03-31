@@ -18,8 +18,13 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
             (lambda theta, d: (d * math.cos(theta), d * math.sin(theta)))
             (random.uniform(0, 2 * math.pi), radius * math.sqrt(random.uniform(0, 1)))
         )
+        x, y = random_pos()
+
         asset_qpos_addr = self.model.jnt_qposadr[self.model.body_jntadr[self.asset_id]]
-        self.data.qpos[asset_qpos_addr:asset_qpos_addr+3] = [*random_pos(), 0.1]
+        self.data.qpos[asset_qpos_addr:asset_qpos_addr+3] = [x, y, 0.1]
+
+        # Point the camera to the asset for visualization
+        self.set_camera_at(x, y)
 
 
     def get_env_state_results(self):
@@ -135,6 +140,11 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         angular_scores[sorted_indices] = angular_scores
         
         return final_score, distance_scores, angular_scores
+
+
+    def set_camera_at(self, x, y):
+        self.mujoco_renderer.viewer.cam.lookat[0] = x
+        self.mujoco_renderer.viewer.cam.lookat[1] = y
 
 
     # Generate XML for MuJoCo

@@ -19,10 +19,10 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.WARNING, format='%(levelname)s: %(message)s')
 
     train = True
-    cube_load_previous_model = False
+    cube_load_previous_model = True
     prexif = "V6"
 
-    num_cubes = 8
+    num_cubes = 16
     nrays = 20
     span_angle_degrees = 360
     communication_items = args.communication_items
