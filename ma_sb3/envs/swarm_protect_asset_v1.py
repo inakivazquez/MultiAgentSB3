@@ -24,7 +24,8 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         self.data.qpos[asset_qpos_addr:asset_qpos_addr+3] = [x, y, 0.1]
 
         # Point the camera to the asset for visualization
-        self.set_camera_at(x, y)
+        if self.render_mode != None:
+            self.set_camera_at(x, y)
 
 
     def get_env_state_results(self):
