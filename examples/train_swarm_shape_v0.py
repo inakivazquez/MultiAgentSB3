@@ -19,8 +19,8 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.WARNING, format='%(levelname)s: %(message)s')
 
     train = False
-    cube_load_previous_model = False
-    prexif = "fw_no_pen"
+    cube_load_previous_model = True
+    prexif = "V5"
 
     num_cubes = 16
     nrays = 20
@@ -39,7 +39,7 @@ if __name__ == "__main__":
 
     env_params = {'num_cubes': num_cubes,
                   'agent_speed': 0.1,
-                  'forward_only': True,
+                  'forward_only': False,
                   'nrays': nrays,
                   'span_angle_degrees': span_angle_degrees,
                   'communication_items': communication_items}

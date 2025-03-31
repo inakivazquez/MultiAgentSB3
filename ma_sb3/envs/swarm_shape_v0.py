@@ -38,8 +38,8 @@ class SwarmShapeEnv(BaseSwarmEnv):
                 # Penalty based on movements
                 mujoco_body_id = self.mujoco_cube_ids[agent_id]
                 if self.active_movements.get(mujoco_body_id) is not None: # For the first state
-                    #rewards[agent_id] -= self.active_movements[mujoco_body_id]['distance_done']  # Penalty based on distance done
-                    #rewards[agent_id] -= self.active_movements[mujoco_body_id]['rotation_done'] / 10  # Penalty based on rotation done
+                    rewards[agent_id] -= self.active_movements[mujoco_body_id]['distance_done']  # Penalty based on distance done
+                    rewards[agent_id] -= self.active_movements[mujoco_body_id]['rotation_done'] / 10  # Penalty based on rotation done
                     pass
                 # Reward based on shape scores
                 rewards[agent_id] += distance_scores[i] / 10  # Reward agents with the individual distance score
@@ -49,9 +49,9 @@ class SwarmShapeEnv(BaseSwarmEnv):
                 #rewards[agent_id] -= 0.01  # Step penalty
                 #print(f"Agent {agent_id} circularity: {circularity}, distance: {distance_scores[i]}, angular: {angular_scores[i]}")
 
-        """if circularity >= circularity_required and average_distance_score > 0.90:
-            terminated = True
-            print(f"Achieved circularity: {circularity}!")"""
+        if circularity >= circularity_required and average_distance_score > 0.90:
+            #terminated = True
+            print(f"Achieved circularity: {circularity}!")
 
         return rewards, terminated, truncated, infos
 
