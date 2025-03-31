@@ -8,6 +8,7 @@ import mujoco
 import numpy as np
 import random
 import os
+import math
 
 from ma_sb3 import AgentMAEnv, BaseMAEnv
 
@@ -28,7 +29,9 @@ class BaseSwarmEnv(MujocoEnv, BaseMAEnv):
         data = mujoco.MjData(model)
         return model, data
 
-    def __init__(self, num_cubes=2, agent_speed=0.5, forward_only = True, nrays=5, span_angle_degrees=180, communication_items=0, **kwargs):
+    def __init__(self, num_cubes=2, agent_speed=0.5, forward_only = True, nrays=5, span_angle_degrees=180, communication_items=0,
+                 obs_body_prefixes = [],
+                 **kwargs):
 
         default_camera_config = {
             "distance": 2.5,
@@ -67,12 +70,15 @@ class BaseSwarmEnv(MujocoEnv, BaseMAEnv):
         self.span_angle_degrees = span_angle_degrees
         self.communication_items = communication_items
         self.forward_only = forward_only
-
+        self.obs_body_prefixes = obs_body_prefixes
+        obs_num_bodies = len(obs_body_prefixes)
+        
         for i in range(num_cubes):
             # Observation space
+            # One-hot for each type of body, then distance to the body and communication items
             observation_space = gym.spaces.Box(
-                low=np.array(([0, 0, 0] + [-1] * self.communication_items) * self.nrays, dtype=np.float32),
-                high=np.array(([1, 1, 1] + [1] * self.communication_items) * self.nrays, dtype=np.float32),
+                low=np.array(([0]*obs_num_bodies + [0] + [-1] * self.communication_items) * self.nrays, dtype=np.float32),
+                high=np.array(([0]*obs_num_bodies + [1] + [1] * self.communication_items) * self.nrays, dtype=np.float32),
                 shape=((3+self.communication_items)*self.nrays,))
             # Action space
             low_limit = 0 if self.forward_only else -1
@@ -126,18 +132,22 @@ class BaseSwarmEnv(MujocoEnv, BaseMAEnv):
         return value
 
     def get_observation(self, agent_id):
-        mujoco_cube_id = self.mujoco_cube_ids[agent_id]
-        detected_body_ids, normalized_distances = self.perform_raycast(mujoco_cube_id)
-        ray_obs = np.zeros((self.nrays, 3+self.communication_items), dtype=np.float32)
+        self_mujoco_cube_id = self.mujoco_cube_ids[agent_id]
+        detected_body_ids, normalized_distances = self.perform_raycast(self_mujoco_cube_id)
+        obs_num_bodies = len(self.obs_body_prefixes)
+        ray_obs = np.zeros((self.nrays, obs_num_bodies + 1 + self.communication_items), dtype=np.float32)
         for i, detected_body_id in enumerate(detected_body_ids):
             # If the detected body is a cube different from the agent's cube
-            if detected_body_id in self.mujoco_cube_ids.values() and detected_body_id != mujoco_cube_id:
-                ray_obs[i][1] = 1 # Flag for cube detected
-                ray_obs[i][2] = normalized_distances[i]
+            if detected_body_id != self_mujoco_cube_id:
+                # Check if the object prefix is in the list
+                for j, prefix in enumerate(self.obs_body_prefixes):
+                    if mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, detected_body_id).startswith(prefix):
+                        ray_obs[i][j] = 1
+                ray_obs[i][obs_num_bodies] = normalized_distances[i]
                 if self.communication_items > 0:
-                    ray_obs[i][3:3+self.communication_items] = self.agent_comm_messages[detected_body_id] # Communication message from the agent
+                    ray_obs[i][obs_num_bodies+1:obs_num_bodies+1+self.communication_items] = self.agent_comm_messages[detected_body_id] # Communication message from the agent
             # For debugging
-            if False and detected_body_id != -1 and detected_body_id != mujoco_cube_id:
+            if False and detected_body_id != -1 and detected_body_id != self_mujoco_cube_id:
                 body_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, detected_body_id)
                 print(f"Ray {i} from {agent_id} hit {body_name} at {normalized_distances[i]}")
 
@@ -165,14 +175,17 @@ class BaseSwarmEnv(MujocoEnv, BaseMAEnv):
         return obs, info
 
     def reset_model(self):
-        margin = 0.5
-        random_pos = lambda: random.choice([random.uniform(-margin, -0.2), random.uniform(0.2, margin)])
+        radius = 0.5
+        random_pos = lambda: (
+            (lambda theta, d: (d * math.cos(theta), d * math.sin(theta)))
+            (random.uniform(0, 2 * math.pi), radius * math.sqrt(random.uniform(0, 1)))
+        )
 
         # Spawn the cubes in random positions
         # As the joint is slide, the qpos is relative to the original location
         for cube_id in self.mujoco_cube_ids.values():
             cube_qpos_addr = self.model.jnt_qposadr[self.model.body_jntadr[cube_id]]
-            self.data.qpos[cube_qpos_addr:cube_qpos_addr+3] = [random_pos(), random_pos(), 0.1]
+            self.data.qpos[cube_qpos_addr:cube_qpos_addr+3] = [*random_pos(), 0.1]
 
         # Necessary to call this function to update the positions before computation
         self.do_simulation(self.data.ctrl, self.frame_skip)

@@ -1,4 +1,4 @@
-from ma_sb3.envs.swarm_shape_v0 import SwarmShapeEnv
+from ma_sb3.envs.swarm_protect_asset_v1 import SwarmProtectAssetEnv
 from ma_sb3 import TimeLimitMAEnv
 from ma_sb3.utils import ma_train, ma_evaluate
 
@@ -26,7 +26,7 @@ if __name__ == "__main__":
     nrays = 20
     span_angle_degrees = 360
     communication_items = args.communication_items
-    experiment_name = f"shape_{prexif}_c{communication_items}_{num_cubes}a_{nrays}r_{span_angle_degrees}"
+    experiment_name = f"proasset_{prexif}_c{communication_items}_{num_cubes}a_{nrays}r_{span_angle_degrees}"
     seed = 42
     num_time_steps = args.n_steps
 
@@ -35,7 +35,7 @@ if __name__ == "__main__":
     cube_algo_params = {'policy': "MlpPolicy", 'seed': seed, 'verbose': 1, 'tensorboard_log': "./logs"}
 
     #cube_model_path = "policies/shape_current_model"
-    cube_model_path = f"policies/shape_{prexif}_model_c{communication_items}"
+    cube_model_path = f"policies/proasset_{prexif}_model_c{communication_items}"
 
     env_params = {'num_cubes': num_cubes,
                   'agent_speed': 0.1,
@@ -46,7 +46,7 @@ if __name__ == "__main__":
                   'communication_items': communication_items}
 
     if train:
-        ma_env = SwarmShapeEnv(**env_params, render_mode=None)
+        ma_env = SwarmProtectAssetEnv(**env_params, render_mode=None)
         ma_env = TimeLimitMAEnv(ma_env, max_episode_steps=500)
 
         model_algo_map = {'cube': (cube_algo, cube_algo_params)}
@@ -74,7 +74,7 @@ if __name__ == "__main__":
     # TESTING SECTION
     render_mode = 'human'
     record_video_file = None
-    ma_env = SwarmShapeEnv(**env_params, render_mode=render_mode)
+    ma_env = SwarmProtectAssetEnv(**env_params, render_mode=render_mode)
     ma_env = TimeLimitMAEnv(ma_env, max_episode_steps=500)
 
     model_cube = cube_algo.load(cube_model_path)
