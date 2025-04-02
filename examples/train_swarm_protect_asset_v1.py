@@ -12,13 +12,21 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Train and evaluate swarm shape environment.")
     parser.add_argument("-c", "--communication_items", type=int, default=0, help="Number of communication items.")
+    parser.add_argument("-t", "--train", action='store_true', help="Train, otherwise test policy.")
     parser.add_argument("-n", "--n_steps", type=int, default=100_000, help="Number of trainign steps.")
+    parser.add_argument("-l", "--load", action='store_true', help="Load previous policy and continue training.")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.WARNING, format='%(levelname)s: %(message)s')
 
-    train = True
-    cube_load_previous_model = False
+    train = args.train
+    cube_load_previous_model = args.load
+    if train:
+        print("Training mode activated.")
+    else:
+        print("Testing mode activated.")
+    if cube_load_previous_model:
+        print("Loading previous model.")
     prexif = "V7"
 
     num_cubes = 8
