@@ -69,7 +69,7 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
                 rewards[agent_id] += distance_scores[i] / 10  # Reward agents with the individual distance score
                 #rewards[agent_id] += angular_scores[i] / 10  # Reward agents with the individual angular score
                 if distance_scores[i] > 0.90:
-                    rewards[agent_id] += 0.5 circularity   # Reward agents with the collective circularity score
+                    rewards[agent_id] += 0.5 * circularity   # Reward agents with the collective circularity score
                 #rewards[agent_id] -= 0.01  # Step penalty
                 #print(f"Agent {agent_id} circularity: {circularity}, distance: {distance_scores[i]}, angular: {angular_scores[i]}")
 
