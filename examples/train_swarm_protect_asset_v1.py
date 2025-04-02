@@ -3,7 +3,6 @@ from ma_sb3 import TimeLimitMAEnv
 from ma_sb3.utils import ma_train, ma_evaluate
 
 from stable_baselines3 import PPO, SAC, TD3, DDPG, DQN
-import pybullet as p
 import logging
 from stable_baselines3.common.env_util import make_vec_env
 import argparse
@@ -20,7 +19,7 @@ if __name__ == "__main__":
 
     train = True
     cube_load_previous_model = False
-    prexif = "V6"
+    prexif = "V7"
 
     num_cubes = 8
     nrays = 20

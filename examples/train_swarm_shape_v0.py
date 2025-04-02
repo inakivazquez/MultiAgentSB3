@@ -3,7 +3,6 @@ from ma_sb3 import TimeLimitMAEnv
 from ma_sb3.utils import ma_train, ma_evaluate
 
 from stable_baselines3 import PPO, SAC, TD3, DDPG, DQN
-import pybullet as p
 import logging
 from stable_baselines3.common.env_util import make_vec_env
 import argparse

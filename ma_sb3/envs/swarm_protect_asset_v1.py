@@ -51,7 +51,7 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         # Compute the circularity score of the agent positions
         circularity, distance_scores, angular_scores = self.circle_fit_score(agent_positions, asset_x, asset_y, asset_distance_required)
 
-        circularity_required = 0.98
+        circularity_required = 0.99
         average_distance_score = np.mean(distance_scores)
         for i,agent_id in enumerate(self.agents):
             if circularity >= circularity_required and average_distance_score > 0.90 and False:
@@ -69,12 +69,14 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
                 rewards[agent_id] += distance_scores[i] / 10  # Reward agents with the individual distance score
                 #rewards[agent_id] += angular_scores[i] / 10  # Reward agents with the individual angular score
                 if distance_scores[i] > 0.90:
-                    rewards[agent_id] += 4 * circularity / 10.0   # Reward agents with the collective circularity score
+                    rewards[agent_id] += 0.5 circularity   # Reward agents with the collective circularity score
                 #rewards[agent_id] -= 0.01  # Step penalty
                 #print(f"Agent {agent_id} circularity: {circularity}, distance: {distance_scores[i]}, angular: {angular_scores[i]}")
 
         if circularity >= circularity_required and average_distance_score > 0.90:
             #terminated = True
+            for agent_id in self.agents:
+                rewards[agent_id] += 0.5 # AdditionaL reward if required circularity is achieved 
             print(f"Achieved circularity: {circularity}!")
 
         if self.movement:
@@ -153,11 +155,11 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         self.mujoco_renderer.viewer.cam.lookat[1] = y
 
     def push_asset_random(self):
-        force_x = random.uniform(-1, 1)
-        force_y = random.uniform(-1, 1)
-        # Apply the force to the asset
-        mujoco.mj_applyFT(self.model, self.data, self.asset_id, force_x, force_y, 0.0, 0.0, 0.0, 0.0)
-
+        self.data.xfrc_applied[self.asset_id, :] = 0  # Reset external forces
+        # Apply force (only first three elements, last three are torque)
+        force = np.random.uniform(-0.5, 0.5, size=3)  # Random force in x, y
+        force[2] = 0
+        self.data.xfrc_applied[self.asset_id, :3] = force  
 
     # Generate XML for MuJoCo
     def generate_mujoco_xml(self, num_cubes:int=1):
@@ -199,7 +201,7 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         xml += f"""       
             <body name="asset" pos="0 0 0.1">
                 <joint type="free"/> 
-                <geom name="geom_asset" group="1" type="cylinder" size="0.05 0.05" rgba="0.0 0.8 0.0 0.4" density="5000"/>
+                <geom name="geom_asset" group="1" type="cylinder" size="0.05 0.05" rgba="0.0 0.8 0.0 0.4" density="5000" friction="0.01 0.01 0.01"/>
             </body> 
             </worldbody>
         </mujoco>"""
