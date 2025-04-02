@@ -9,6 +9,8 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         super().__init__(*args, **kwargs)
         self.asset_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "asset")
 
+        self.movement = False
+
     def reset_model(self):
         super().reset_model()
 
@@ -74,6 +76,9 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         if circularity >= circularity_required and average_distance_score > 0.90:
             #terminated = True
             print(f"Achieved circularity: {circularity}!")
+
+        if self.movement:
+            self.push_asset_random()
 
         return rewards, terminated, truncated, infos
 
@@ -146,6 +151,12 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
     def set_camera_at(self, x, y):
         self.mujoco_renderer.viewer.cam.lookat[0] = x
         self.mujoco_renderer.viewer.cam.lookat[1] = y
+
+    def push_asset_random(self):
+        force_x = random.uniform(-1, 1)
+        force_y = random.uniform(-1, 1)
+        # Apply the force to the asset
+        mujoco.mj_applyFT(self.model, self.data, self.asset_id, force_x, force_y, 0.0, 0.0, 0.0, 0.0)
 
 
     # Generate XML for MuJoCo
