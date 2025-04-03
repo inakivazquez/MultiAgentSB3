@@ -84,8 +84,8 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
                 pass
 
             # Reward based on shape scores of the closest asset
-            best_asset_for_agent = np.argmax([assets_distance_scores[i][j] for j in range(len(self.num_assets))])
-            best_distance_score = assets_distance_scores[i][best_asset_for_agent]
+            best_asset_for_agent = np.argmax([assets_distance_scores[j][i] for j in range(self.num_assets)])
+            best_distance_score = assets_distance_scores[best_asset_for_agent][i]
 
             rewards[agent_id] += best_distance_score / 10  # Reward agents with the individual distance score
 

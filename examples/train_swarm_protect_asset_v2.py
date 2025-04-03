@@ -45,6 +45,7 @@ if __name__ == "__main__":
     cube_model_path = f"policies/proasset_{prexif}_model_c{communication_items}"
 
     env_params = {'num_cubes': num_cubes,
+                  'num_assets': 3,
                   'agent_speed': 0.1,
                   'forward_only': False,
                   'nrays': nrays,
