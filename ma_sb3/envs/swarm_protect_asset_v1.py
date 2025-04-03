@@ -56,28 +56,29 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
 
         protection_achieved = (circularity >= self.circularity_required and average_distance_score > 0.90)
 
-        for i,agent_id in enumerate(self.agents):
-            if protection_achieved:
-                rewards[agent_id] += 1.0  # Reward agents if ahieved the circularity score
-                #print(f"Agent {agent_id} circularity: {circularity}, distance: {distance_scores[i]}")
-            else:
-                # Penalty based on movements
-                mujoco_body_id = self.mujoco_cube_ids[agent_id]
-                if self.active_movements.get(mujoco_body_id) is not None: # For the first state
-                    rewards[agent_id] -= self.active_movements[mujoco_body_id]['distance_done']  # Penalty based on distance done
-                    rewards[agent_id] -= self.active_movements[mujoco_body_id]['rotation_done'] / 10  # Penalty based on rotation done
-                    pass
-                # Reward based on shape scores
-                rewards[agent_id] += distance_scores[i] / 10  # Reward agents with the individual distance score
-                #rewards[agent_id] += angular_scores[i] / 10  # Reward agents with the individual angular score
-                if distance_scores[i] > 0.90:
-                    rewards[agent_id] += 0.5 * circularity   # Reward agents with the collective circularity score
-                #rewards[agent_id] -= 0.01  # Step penalty
-                #print(f"Agent {agent_id} circularity: {circularity}, distance: {distance_scores[i]}, angular: {angular_scores[i]}")
-
         if protection_achieved:
             #terminated = True
             print(f"Achieved circularity: {circularity}!")
+
+        for i,agent_id in enumerate(self.agents):
+            # Penalty based on movements
+            mujoco_body_id = self.mujoco_cube_ids[agent_id]
+            if self.active_movements.get(mujoco_body_id) is not None: # For the first state
+                rewards[agent_id] -= self.active_movements[mujoco_body_id]['distance_done']  # Penalty based on distance done
+                rewards[agent_id] -= self.active_movements[mujoco_body_id]['rotation_done'] / 10  # Penalty based on rotation done
+                pass
+            
+            # Reward based on shape scores
+            rewards[agent_id] += distance_scores[i] / 10  # Reward agents with the individual distance score
+            #rewards[agent_id] += angular_scores[i] / 10  # Reward agents with the individual angular score
+
+            if distance_scores[i] > 0.90:
+                rewards[agent_id] += 0.5 * circularity   # Reward agents with the collective circularity score
+            #print(f"Agent {agent_id} circularity: {circularity}, distance: {distance_scores[i]}, angular: {angular_scores[i]}")
+
+            if protection_achieved:
+                rewards[agent_id] += 0.5  # Additional reward for achieving protection
+
 
         if self.movement:
             self.push_asset_random()

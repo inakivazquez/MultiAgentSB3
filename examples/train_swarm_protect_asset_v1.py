@@ -27,7 +27,7 @@ if __name__ == "__main__":
         print("Testing mode activated.")
     if cube_load_previous_model:
         print("Loading previous model.")
-    prexif = "V7_98"
+    prexif = "V8_98"
 
     num_cubes = 16
     nrays = 20
