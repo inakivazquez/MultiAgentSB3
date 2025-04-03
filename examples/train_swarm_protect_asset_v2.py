@@ -1,4 +1,4 @@
-from ma_sb3.envs.swarm_protect_asset_v1 import SwarmProtectAssetEnv
+from ma_sb3.envs.swarm_protect_asset_v2 import SwarmProtectAssetEnv
 from ma_sb3 import TimeLimitMAEnv
 from ma_sb3.utils import ma_train, ma_evaluate
 

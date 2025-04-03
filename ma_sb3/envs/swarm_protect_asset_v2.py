@@ -5,9 +5,14 @@ import random
 import math
 
 class SwarmProtectAssetEnv(BaseSwarmEnv):
-    def __init__(self, circularity_required = 0.99, *args, **kwargs):
+    def __init__(self, num_assets = 1, circularity_required = 0.99, *args, **kwargs):
+        self.num_assets = num_assets # Important at this point as it is used to generate the XML in the parent class
+        
         super().__init__(*args, **kwargs)
-        self.asset_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "asset")
+
+        self.asset_ids = []
+        for i in range(num_assets):
+            self.asset_ids.append(mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, f"asset_{i}"))
 
         self.circularity_required = circularity_required
         self.movement = False
@@ -21,15 +26,13 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
             (lambda theta, d: (d * math.cos(theta), d * math.sin(theta)))
             (random.uniform(0, 2 * math.pi), radius * math.sqrt(random.uniform(0, 1)))
         )
-        x, y = random_pos()
 
-        asset_qpos_addr = self.model.jnt_qposadr[self.model.body_jntadr[self.asset_id]]
-        self.data.qpos[asset_qpos_addr:asset_qpos_addr+3] = [x, y, 0.1]
+        # Generate random positions for all assets
+        for asset_id in self.asset_ids:
+            x, y = random_pos()
 
-        # Point the camera to the asset for visualization
-        if self.render_mode != None:
-            self.set_camera_at(x, y)
-
+            asset_qpos_addr = self.model.jnt_qposadr[self.model.body_jntadr[asset_id]]
+            self.data.qpos[asset_qpos_addr:asset_qpos_addr+3] = [x, y, 0.1]
 
     def get_env_state_results(self):
         truncated = False
@@ -48,18 +51,29 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         ])
 
         asset_distance_required = 0.2
-        asset_x, asset_y = self.data.xpos[self.asset_id][:2]
-        # Compute the circularity score of the agent positions
-        circularity, distance_scores, angular_scores = self.circle_fit_score(agent_positions, asset_x, asset_y, asset_distance_required)
-
-        average_distance_score = np.mean(distance_scores)
         distance_score_required = 0.95
 
-        protection_achieved = (circularity >= self.circularity_required and average_distance_score > distance_score_required)
+        assets_protection_achieved = []
+        assets_circularity_scores = []
+        assets_distance_scores = []
 
-        if protection_achieved:
-            #terminated = True
-            print(f"Achieved protection: {circularity}!")
+        # Compute the circularity score of the agent positions
+        # Iterate over all assets
+        for i, asset_id in enumerate(self.asset_ids):
+            # Get the x, y coordinates of the asset
+            asset_x, asset_y = self.data.xpos[asset_id][:2]
+            # Compute the circularity score of the agent positions
+            this_circularity, this_distance_scores, this_angular_scores = self.circle_fit_score(agent_positions, asset_x, asset_y, asset_distance_required)
+
+            assets_circularity_scores.append(this_circularity)
+            assets_distance_scores.append(this_distance_scores)
+            this_average_distance_score = np.mean(this_distance_scores)
+
+            this_protection_achieved = (this_circularity >= self.circularity_required and this_average_distance_score > distance_score_required)
+            assets_protection_achieved.append(this_protection_achieved)
+
+            if this_protection_achieved:
+                print(f"Achieved protection for asset {i}: {this_circularity}!")
 
         for i,agent_id in enumerate(self.agents):
             # Penalty based on movements
@@ -69,15 +83,17 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
                 rewards[agent_id] -= self.active_movements[mujoco_body_id]['rotation_done'] / 10  # Penalty based on rotation done
                 pass
 
-            # Reward based on shape scores
-            rewards[agent_id] += distance_scores[i] / 10  # Reward agents with the individual distance score
-            #rewards[agent_id] += angular_scores[i] / 10  # Reward agents with the individual angular score
+            # Reward based on shape scores of the closest asset
+            best_asset_for_agent = np.argmax([assets_distance_scores[i][j] for j in range(len(self.num_assets))])
+            best_distance_score = assets_distance_scores[i][best_asset_for_agent]
 
-            if distance_scores[i] > distance_score_required:
-                rewards[agent_id] += 0.5 * circularity   # Reward agents with the collective circularity score
+            rewards[agent_id] += best_distance_score / 10  # Reward agents with the individual distance score
+
+            if best_distance_score > distance_score_required:
+                rewards[agent_id] += 0.5 * assets_circularity_scores[best_asset_for_agent]   # Reward agents with the collective circularity score
             #print(f"Agent {agent_id} circularity: {circularity}, distance: {distance_scores[i]}, angular: {angular_scores[i]}")
 
-            if protection_achieved:
+            if assets_protection_achieved[best_asset_for_agent]:
                 rewards[agent_id] += 0.5  # Additional reward for achieving protection
 
 
@@ -200,11 +216,16 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
                 </body>            
             </body>"""
 
-        xml += f"""       
-            <body name="asset" pos="0 0 0.1">
-                <joint type="free"/> 
-                <geom name="geom_asset" group="1" type="cylinder" size="0.05 0.05" rgba="0.0 0.8 0.0 0.4" density="5000" friction="0.01 0.01 0.01"/>
-            </body> 
+
+        for i in range(self.num_assets):
+            x, y = random.uniform(-0.5, 0.5), random.uniform(-0.5, 0.5)
+            xml += f"""       
+                <body name="asset_{i}" pos="{x} {y} 0.1">
+                    <joint type="free"/> 
+                    <geom name="geom_asset_{i}" group="1" type="cylinder" size="0.05 0.05" rgba="0.0 0.8 0.0 0.4" density="5000" friction="0.01 0.01 0.01"/>
+                </body>"""
+        
+        xml += f"""
             </worldbody>
         </mujoco>"""
         
