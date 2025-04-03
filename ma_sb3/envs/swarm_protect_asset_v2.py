@@ -98,7 +98,7 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
 
 
         if self.movement:
-            self.push_asset_random()
+            self.push_assets_random()
 
         return rewards, terminated, truncated, infos
 
@@ -107,7 +107,7 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         detected_body_ids, normalized_distances = self.perform_raycast(mujoco_cube_id)
         ray_obs = np.zeros((self.nrays, 3+self.communication_items), dtype=np.float32)
         for i, detected_body_id in enumerate(detected_body_ids):
-            if detected_body_id == self.asset_id:
+            if detected_body_id in self.asset_ids:
                 ray_obs[i][0] = 1
                 ray_obs[i][2] = normalized_distances[i]
             # If the detected body is a cube different from the agent's cube
@@ -172,12 +172,13 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         self.mujoco_renderer.viewer.cam.lookat[0] = x
         self.mujoco_renderer.viewer.cam.lookat[1] = y
 
-    def push_asset_random(self):
-        self.data.xfrc_applied[self.asset_id, :] = 0  # Reset external forces
-        # Apply force (only first three elements, last three are torque)
-        force = np.random.uniform(-0.5, 0.5, size=3)  # Random force in x, y
-        force[2] = 0
-        self.data.xfrc_applied[self.asset_id, :3] = force  
+    def push_assets_random(self):
+        for asset_id in self.asset_ids:
+            self.data.xfrc_applied[self.asset_id, :] = 0  # Reset external forces
+            # Apply force (only first three elements, last three are torque)
+            force = np.random.uniform(-0.5, 0.5, size=3)  # Random force in x, y
+            force[2] = 0
+            self.data.xfrc_applied[self.asset_id, :3] = force  
 
     # Generate XML for MuJoCo
     def generate_mujoco_xml(self, num_cubes:int=1):
