@@ -27,9 +27,9 @@ if __name__ == "__main__":
         print("Testing mode activated.")
     if cube_load_previous_model:
         print("Loading previous model.")
-    prexif = "V7"
+    prexif = "V7_98"
 
-    num_cubes = 8
+    num_cubes = 16
     nrays = 20
     span_angle_degrees = 360
     communication_items = args.communication_items
@@ -50,7 +50,8 @@ if __name__ == "__main__":
                   'nrays': nrays,
                   'span_angle_degrees': span_angle_degrees,
                   'obs_body_prefixes': ['asset', 'cube'],
-                  'communication_items': communication_items}
+                  'communication_items': communication_items,
+                  'circularity_required': 0.98}
 
     if train:
         ma_env = SwarmProtectAssetEnv(**env_params, render_mode=None)

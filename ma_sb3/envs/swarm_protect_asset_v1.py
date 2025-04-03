@@ -5,10 +5,11 @@ import random
 import math
 
 class SwarmProtectAssetEnv(BaseSwarmEnv):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, circularity_required = 0.99, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.asset_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "asset")
 
+        self.circularity_required = circularity_required
         self.movement = False
 
     def reset_model(self):
@@ -51,13 +52,14 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         # Compute the circularity score of the agent positions
         circularity, distance_scores, angular_scores = self.circle_fit_score(agent_positions, asset_x, asset_y, asset_distance_required)
 
-        circularity_required = 0.99
         average_distance_score = np.mean(distance_scores)
+
+        protection_achieved = (circularity >= self.circularity_required and average_distance_score > 0.90)
+
         for i,agent_id in enumerate(self.agents):
-            if circularity >= circularity_required and average_distance_score > 0.90 and False:
-                rewards[agent_id] += 100  # Reward agents with the circularity score
-                #rewards[agent_id] -= (1 - np.mean(distance_scores))*100  # Penalty average distance from the circle
-                print(f"Agent {agent_id} circularity: {circularity}, distance: {distance_scores[i]}")
+            if protection_achieved:
+                rewards[agent_id] += 1.0  # Reward agents if ahieved the circularity score
+                #print(f"Agent {agent_id} circularity: {circularity}, distance: {distance_scores[i]}")
             else:
                 # Penalty based on movements
                 mujoco_body_id = self.mujoco_cube_ids[agent_id]
@@ -73,10 +75,8 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
                 #rewards[agent_id] -= 0.01  # Step penalty
                 #print(f"Agent {agent_id} circularity: {circularity}, distance: {distance_scores[i]}, angular: {angular_scores[i]}")
 
-        if circularity >= circularity_required and average_distance_score > 0.90:
+        if protection_achieved:
             #terminated = True
-            for agent_id in self.agents:
-                rewards[agent_id] += 0.5 # AdditionaL reward if required circularity is achieved 
             print(f"Achieved circularity: {circularity}!")
 
         if self.movement:
