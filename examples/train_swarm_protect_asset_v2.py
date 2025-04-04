@@ -27,9 +27,9 @@ if __name__ == "__main__":
         print("Testing mode activated.")
     if cube_load_previous_model:
         print("Loading previous model.")
-    prefix = "multi_V1_2s"
+    prefix = "multi_V2_2s"
 
-    num_cubes = 64
+    num_cubes = 32
     nrays = 20
     span_angle_degrees = 360
     communication_items = args.communication_items
