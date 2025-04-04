@@ -27,13 +27,13 @@ if __name__ == "__main__":
         print("Testing mode activated.")
     if cube_load_previous_model:
         print("Loading previous model.")
-    prexif = "V8_d95"
+    prefix = "multi_V1_2s"
 
-    num_cubes = 16
+    num_cubes = 50
     nrays = 20
     span_angle_degrees = 360
     communication_items = args.communication_items
-    experiment_name = f"proasset_{prexif}_c{communication_items}_{num_cubes}a_{nrays}r_{span_angle_degrees}"
+    experiment_name = f"proasset_{prefix}_c{communication_items}_{num_cubes}a_{nrays}r_{span_angle_degrees}"
     seed = 42
     num_time_steps = args.n_steps
 
@@ -42,17 +42,17 @@ if __name__ == "__main__":
     cube_algo_params = {'policy': "MlpPolicy", 'seed': seed, 'verbose': 1, 'tensorboard_log': "./logs"}
 
     #cube_model_path = "policies/shape_current_model"
-    cube_model_path = f"policies/proasset_{prexif}_model_c{communication_items}"
+    cube_model_path = f"policies/proasset_{prefix}_model_c{communication_items}"
 
     env_params = {'num_cubes': num_cubes,
-                  'num_assets': 3,
+                  'num_assets': 2,
                   'agent_speed': 0.1,
                   'forward_only': False,
                   'nrays': nrays,
                   'span_angle_degrees': span_angle_degrees,
                   'obs_body_prefixes': ['asset', 'cube'],
                   'communication_items': communication_items,
-                  'circularity_required': 0.99}
+                  'circularity_required': 0.98}
 
     if train:
         ma_env = SwarmProtectAssetEnv(**env_params, render_mode=None)
