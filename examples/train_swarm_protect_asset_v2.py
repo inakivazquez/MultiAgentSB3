@@ -29,7 +29,7 @@ if __name__ == "__main__":
         print("Loading previous model.")
     prefix = "multi_V1_2s"
 
-    num_cubes = 50
+    num_cubes = 64
     nrays = 20
     span_angle_degrees = 360
     communication_items = args.communication_items

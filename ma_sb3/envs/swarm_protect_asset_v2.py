@@ -18,8 +18,6 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         self.movement = False
 
     def reset_model(self):
-        super().reset_model()
-
         # Create the asset in a random position
         radius = 0.5
         random_pos = lambda: (
@@ -34,6 +32,11 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
             asset_qpos_addr = self.model.jnt_qposadr[self.model.body_jntadr[asset_id]]
             self.data.qpos[asset_qpos_addr:asset_qpos_addr+3] = [x, y, 0.1]
 
+        # Now generate the agents
+        super().reset_model()
+
+
+
     def get_env_state_results(self):
         truncated = False
         rewards = {}
@@ -44,12 +47,22 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         for agent_id in self.agents:
             rewards[agent_id] = 0
 
-        # Store the x, y coordinates of all agents in a numpy array
-        agent_positions = np.array([
-            self.data.xpos[self.mujoco_cube_ids[agent_id]][:2] 
-            for agent_id in self.agents
-        ])
+        # Step 1: Assign each agent to the closest asset
+        asset_groups = {i: {} for i in range(len(self.asset_ids))}
+        asset_positions = [
+            self.data.xpos[asset_id][:2] for asset_id in self.asset_ids
+        ]
 
+        agent_closest_asset = {}  # Map agent_id -> closest asset index
+
+        for agent_id in self.agents:
+            agent_pos = self.data.xpos[self.mujoco_cube_ids[agent_id]][:2]
+            distances = [np.linalg.norm(agent_pos - asset_pos) for asset_pos in asset_positions]
+            closest_asset_idx = int(np.argmin(distances))
+            asset_groups[closest_asset_idx][agent_id] = agent_pos
+            agent_closest_asset[agent_id] = closest_asset_idx
+
+        # Step 2: Evaluate asset protection conditions
         asset_distance_required = 0.2
         distance_score_required = 0.95
 
@@ -57,50 +70,69 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         assets_circularity_scores = []
         assets_distance_scores = []
 
-        # Compute the circularity score of the agent positions
-        # Iterate over all assets
         for i, asset_id in enumerate(self.asset_ids):
-            # Get the x, y coordinates of the asset
             asset_x, asset_y = self.data.xpos[asset_id][:2]
-            # Compute the circularity score of the agent positions
-            this_circularity, this_distance_scores, this_angular_scores = self.circle_fit_score(agent_positions, asset_x, asset_y, asset_distance_required)
+            agent_positions = asset_groups[i]
 
+            agent_positions_array = np.array(list(agent_positions.values()))
+
+            if len(agent_positions) <= 1:
+                this_circularity = 0
+                this_distance_scores = [0] * len(agent_positions_array)
+            else:
+                this_circularity, this_distance_scores, this_angular_scores = self.circle_fit_score(
+                    agent_positions_array, asset_x, asset_y, asset_distance_required
+                )
+
+                
             assets_circularity_scores.append(this_circularity)
             assets_distance_scores.append(this_distance_scores)
-            this_average_distance_score = np.mean(this_distance_scores)
 
-            this_protection_achieved = (this_circularity >= self.circularity_required and this_average_distance_score > distance_score_required)
+            this_avg_distance_score = np.mean(this_distance_scores) if len(this_distance_scores) > 0 else 0
+
+            this_protection_achieved = (
+                this_circularity >= self.circularity_required and
+                this_avg_distance_score > distance_score_required
+            )
             assets_protection_achieved.append(this_protection_achieved)
 
             if this_protection_achieved:
                 print(f"Achieved protection for asset {i}: {this_circularity}!")
 
-        for i,agent_id in enumerate(self.agents):
-            # Penalty based on movements
+        # Step 3: Assign rewards to each agent
+        for agent_id in self.agents:
             mujoco_body_id = self.mujoco_cube_ids[agent_id]
-            if self.active_movements.get(mujoco_body_id) is not None: # For the first state
-                rewards[agent_id] -= self.active_movements[mujoco_body_id]['distance_done']  # Penalty based on distance done
-                rewards[agent_id] -= self.active_movements[mujoco_body_id]['rotation_done'] / 10  # Penalty based on rotation done
-                pass
 
-            # Reward based on shape scores of the closest asset
-            best_asset_for_agent = np.argmax([assets_distance_scores[j][i] for j in range(self.num_assets)])
-            best_distance_score = assets_distance_scores[best_asset_for_agent][i]
+            if self.active_movements.get(mujoco_body_id) is not None:
+                rewards[agent_id] -= self.active_movements[mujoco_body_id]['distance_done']
+                rewards[agent_id] -= self.active_movements[mujoco_body_id]['rotation_done'] / 10
 
-            rewards[agent_id] += best_distance_score / 10  # Reward agents with the individual distance score
+            agent_asset_group_index = agent_closest_asset[agent_id]
+            agent_index_in_group = list(asset_groups[agent_asset_group_index].keys()).index(agent_id)
 
-            if best_distance_score > distance_score_required:
-                rewards[agent_id] += 0.5 * assets_circularity_scores[best_asset_for_agent]   # Reward agents with the collective circularity score
-            #print(f"Agent {agent_id} circularity: {circularity}, distance: {distance_scores[i]}, angular: {angular_scores[i]}")
+            # Use only the distance score of this agent from the correct group
+            agent_distance_score = assets_distance_scores[agent_asset_group_index][agent_index_in_group]
+            rewards[agent_id] += agent_distance_score / 10
 
-            if assets_protection_achieved[best_asset_for_agent]:
-                rewards[agent_id] += 0.5  # Additional reward for achieving protection
+            if agent_distance_score > distance_score_required:
+                rewards[agent_id] += 0.5 * assets_circularity_scores[agent_asset_group_index]
 
+            # If the agent is protecting an asset
+            if assets_protection_achieved[agent_asset_group_index]:
+                rewards[agent_id] += 0.5
+
+            # If all assets are protected, give a bonus
+            if all(assets_protection_achieved):
+                rewards[agent_id] += 1.0
+
+        if all(assets_protection_achieved):
+            print("All assets are protected!")
 
         if self.movement:
             self.push_assets_random()
 
         return rewards, terminated, truncated, infos
+
 
     def get_observation(self, agent_id):
         mujoco_cube_id = self.mujoco_cube_ids[agent_id]
