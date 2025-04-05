@@ -206,11 +206,11 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
 
     def push_assets_random(self):
         for asset_id in self.asset_ids:
-            self.data.xfrc_applied[self.asset_id, :] = 0  # Reset external forces
+            self.data.xfrc_applied[asset_id, :] = 0  # Reset external forces
             # Apply force (only first three elements, last three are torque)
             force = np.random.uniform(-0.5, 0.5, size=3)  # Random force in x, y
             force[2] = 0
-            self.data.xfrc_applied[self.asset_id, :3] = force  
+            self.data.xfrc_applied[asset_id, :3] = force  
 
     # Generate XML for MuJoCo
     def generate_mujoco_xml(self, num_cubes:int=1):

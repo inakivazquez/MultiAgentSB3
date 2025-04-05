@@ -52,14 +52,14 @@ def delete_temp_model_files(temp_model_files):
         if os.path.exists(temp_file):
             os.remove(temp_file)
 
-def ma_train(ma_env, model_algo_map, models_to_train='all', models_to_load=None,
+def ma_train(ma_env, model_algo_map, models_to_train='__all__', models_to_load=None,
              total_timesteps_per_model=10_000, training_iterations=2, tb_log_suffix=""):        
         """
         Trains multiple agents in a multi-agent environment using different models and algorithms.
         Args:
             ma_env (MultiAgentEnv): The multi-agent environment.
             model_algo_map (dict): A dictionary mapping agent names to tuples of (algorithm, algorithm_params).
-            models_to_train (list or str, optional): The list of model names to train. Defaults to 'all'.
+            models_to_train (list or str, optional): The list of model names to train. Defaults to '__all__'.
             models_to_load (dict, optional): A dictionary mapping model names to pre-trained models to load based on their path. Defaults to None.
             total_timesteps_per_model (int, optional): The total number of timesteps to train each model. Defaults to 10_000.
             training_iterations (int, optional): The number of training iterations. Defaults to 2.
@@ -97,7 +97,7 @@ def ma_train(ma_env, model_algo_map, models_to_train='all', models_to_load=None,
         else:
             reset_timesteps = False
 
-        if models_to_train == 'all':
+        if models_to_train == '__all__':
             models_to_train = list(models.keys())
 
         for i in range(training_iterations):
@@ -127,7 +127,6 @@ def ma_train(ma_env, model_algo_map, models_to_train='all', models_to_load=None,
         delete_temp_model_files(trained_model_filenames)
 
         return models
-
 
 def ma_evaluate(ma_env, models, total_episodes=100, verbose=False):
     """
