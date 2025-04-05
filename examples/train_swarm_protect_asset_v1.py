@@ -63,7 +63,7 @@ if __name__ == "__main__":
         if cube_load_previous_model:
             models_to_load['cube'] = cube_model_path
 
-        models_to_train = 'all'
+        models_to_train = '__all__'
 
         trained_models = ma_train(ma_env, model_algo_map=model_algo_map,
                  models_to_train=models_to_train, models_to_load=models_to_load,

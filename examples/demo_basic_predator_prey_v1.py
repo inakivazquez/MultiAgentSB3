@@ -26,7 +26,7 @@ if __name__ == "__main__":
 
     model_algo_map = {'predator': (predator_algo, predator_algo_params), 'prey': (prey_algo, prey_algo_params)}
 
-    trained_models = ma_train(ma_env, model_algo_map=model_algo_map, models_to_train='all',
+    trained_models = ma_train(ma_env, model_algo_map=model_algo_map, models_to_train='__all__',
                 total_timesteps_per_model=10_000, training_iterations=5,
                 tb_log_suffix=f"predator_prey")
 

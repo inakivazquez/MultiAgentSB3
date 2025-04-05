@@ -45,7 +45,7 @@ if __name__ == "__main__":
             models_to_load['prey'] = prey_model_path
 
         trained_models = ma_train(ma_env, model_algo_map=model_algo_map,
-                 models_to_train='all', models_to_load=models_to_load,
+                 models_to_train='__all__', models_to_load=models_to_load,
                  total_timesteps_per_model=1_000_000, training_iterations=100,
                  tb_log_suffix=f"{n_predators}preds_{experiment_name}")
 
