@@ -28,13 +28,13 @@ if __name__ == "__main__":
     if cube_load_previous_model:
         print("Loading previous model.")
 
-    num_cubes = 32
-    num_assets = 2
+    num_cubes = 16
+    num_assets = 1
     nrays = 20
     span_angle_degrees = 360
     communication_items = args.communication_items
 
-    prefix = f"multi_V2_Les2_{num_assets}s"
+    prefix = f"multi_V3_{num_assets}s"
 
     experiment_name = f"proasset_{prefix}_c{communication_items}_{num_cubes}a_{nrays}r_{span_angle_degrees}"
     seed = 42
@@ -45,7 +45,7 @@ if __name__ == "__main__":
     cube_algo_params = {'policy': "MlpPolicy", 'seed': seed, 'verbose': 1, 'tensorboard_log': "./logs"}
 
     cube_model_path = f"policies/proasset_{prefix}_model_c{communication_items}"
-    cube_model_path = "policies/current_model"
+    #cube_model_path = "policies/current_model"
 
     env_params = {'num_cubes': num_cubes,
                   'num_assets': num_assets,
@@ -55,7 +55,7 @@ if __name__ == "__main__":
                   'span_angle_degrees': span_angle_degrees,
                   'obs_body_prefixes': ['asset', 'cube'],
                   'communication_items': communication_items,
-                  'circularity_required': 0.98}
+                  'circularity_required': 0.90}
 
     if train:
         ma_env = SwarmProtectAssetEnv(**env_params, render_mode=None)
