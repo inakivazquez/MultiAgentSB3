@@ -42,74 +42,68 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         infos = {}   
         terminated = False
 
+        agent_ids = list(self.agents)
+        
         # Initialize rewards dictionary
-        for agent_id in self.agents:
-            rewards[agent_id] = 0
+        rewards = dict.fromkeys(agent_ids, 0.0)
 
         # Step 1: Calculate asset possitions and agent positions
-        asset_positions = [
-            self.data.xpos[asset_id][:2] for asset_id in self.asset_ids
-        ]
+        asset_positions = np.array([self.data.xpos[aid][:2] for aid in self.asset_ids])
+        agent_positions = np.array([
+            self.data.xpos[self.mujoco_cube_ids[aid]][:2] for aid in agent_ids
+        ])
 
-        agent_positions = [
-            self.data.xpos[self.mujoco_cube_ids[agent_id]][:2] for agent_id in self.agents
-        ]
+        # Step 1.1: Compute closest assets to agents
+        assets_close_to_agents_indices, assets_close_to_agents_distances = self.compute_closest_assets_to_agents(agent_positions, asset_positions)
 
         # Step 2: Evaluate asset protection conditions
         asset_distance_required = 0.2
         asset_distance_margin = 0.1
+        distance_score_required = 0.9
 
         assets_protection_achieved = []
         assets_surrounding_scores = []
 
-        for i, asset_id in enumerate(self.asset_ids):
-            if len(agent_positions) <= 1:
-                this_surrounding_ratio = 0
-            else:
-                this_surrounding_ratio = self.compute_surrounding_score(
-                    asset_positions[i],
-                    agent_positions,
-                    asset_distance_required - asset_distance_margin,
-                    asset_distance_required + asset_distance_margin
-                    )
-                
-            assets_surrounding_scores.append(this_surrounding_ratio)
+        for i, asset_pos in enumerate(asset_positions):
+            score = self.compute_surrounding_score(
+                asset_pos,
+                agent_positions,
+                asset_distance_required - asset_distance_margin,
+                asset_distance_required + asset_distance_margin
+            )
+            assets_surrounding_scores.append(score)
+            protection = score >= self.circularity_required
+            assets_protection_achieved.append(protection)
 
-            this_protection_achieved = (this_surrounding_ratio >= self.circularity_required)
-            assets_protection_achieved.append(this_protection_achieved)
+            if protection:
+                print(f"Achieved protection for asset {i}: {score}!")
 
-            if this_protection_achieved:
-                print(f"Achieved protection for asset {i}: {this_surrounding_ratio}!")
+        all_protected = all(assets_protection_achieved)
 
-        # Step 3: Assign rewards to each agent
-        for agent_id in self.agents:
-            mujoco_body_id = self.mujoco_cube_ids[agent_id]
+        # Step 3: Compute agent rewards
+        for i, agent_id in enumerate(agent_ids):
+            body_id = self.mujoco_cube_ids[agent_id]
 
-            if self.active_movements.get(mujoco_body_id) is not None:
-                rewards[agent_id] -= self.active_movements[mujoco_body_id]['distance_done']
-                rewards[agent_id] -= self.active_movements[mujoco_body_id]['rotation_done'] / 10
+            move = self.active_movements.get(body_id)
+            if move:
+                rewards[agent_id] -= move['distance_done']
+                rewards[agent_id] -= move['rotation_done'] / 10
 
-            # Reward based on distance to the closest asset
-            agent_pos = self.data.xpos[self.mujoco_cube_ids[agent_id]][:2]
-            distances = [np.linalg.norm(agent_pos - asset_pos) for asset_pos in asset_positions]
-            closest_asset_idx = int(np.argmin(distances))
-            closest_distance = np.min(distances)
-            agent_distance_score = 1 - abs(1 - closest_distance / asset_distance_required)  # Invert the score to reward closer distances
+            closest_idx = assets_close_to_agents_indices[i]
+            closest_dist = assets_close_to_agents_distances[i]
+            dist_score = np.exp(-abs(closest_dist - asset_distance_required))
+            rewards[agent_id] += dist_score / 10
 
-            rewards[agent_id] += agent_distance_score / 10
+            if dist_score >= distance_score_required:
+                rewards[agent_id] += 0.5 * assets_surrounding_scores[closest_idx]
 
-            #if agent_distance_score > distance_score_required:
-            #    rewards[agent_id] += 0.5 * assets_surrounding_scores[agent_asset_group_index]
-
-            # If the agent is protecting an asset
-            if assets_protection_achieved[closest_asset_idx]:
+            if assets_protection_achieved[closest_idx]:
                 rewards[agent_id] += 0.5
 
-            # If all assets are protected, give a bonus
-            if all(assets_protection_achieved):
+            if all_protected:
                 rewards[agent_id] += 1.0
 
-        if all(assets_protection_achieved):
+        if all_protected:
             print("All assets are protected!")
 
         if self.movement:
@@ -141,46 +135,41 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         obs = ray_obs.copy()
         return obs
 
+    def compute_closest_assets_to_agents(self, agent_positions, asset_positions):
+        # agent_positions: (N_agents, 2)
+        # asset_positions: (N_assets, 2)
+        agent_positions = np.asarray(agent_positions)
+        asset_positions = np.asarray(asset_positions)
+        
+        # Expand dimensions to compute pairwise distances:
+        # agents -> shape (N_agents, 1, 2)
+        # assets -> shape (1, N_assets, 2)
+        diffs = agent_positions[:, np.newaxis, :] - asset_positions[np.newaxis, :, :]
+        distances = np.linalg.norm(diffs, axis=2)  # shape (N_agents, N_assets)
+
+        # Get closest asset index and distance per agent
+        closest_indices = np.argmin(distances, axis=1)
+        closest_distances = np.min(distances, axis=1)
+
+        return closest_indices.astype(int), closest_distances.astype(float)
+
     def compute_surrounding_score(self, asset_pos, agents_pos, min_distance, max_distance):
-        # Extract the x and y coordinates of the asset
-        ax, ay = asset_pos
-        
-        # List to hold angles of agents that are within the distance range
-        angles = []
-        
-        # Loop through each agent and compute its distance and angle relative to the asset
-        for agent_pos in agents_pos:
-            axg, ayg = agent_pos
-            distance = np.sqrt((axg - ax) ** 2 + (ayg - ay) ** 2)
-            
-            # Only consider agents within the specified distance range
-            if min_distance <= distance <= max_distance:
-                angle = np.arctan2(ayg - ay, axg - ax)  # Calculate angle relative to asset
-                angles.append(angle)
-        
-        # If there are not enough agents in the specified range, return a score of 0
-        if len(angles) < 2:
+        agents_pos = np.asarray(agents_pos)
+        dx = agents_pos[:, 0] - asset_pos[0]
+        dy = agents_pos[:, 1] - asset_pos[1]
+        distances = np.hypot(dx, dy)
+        mask = (distances >= min_distance) & (distances <= max_distance)
+
+        if np.sum(mask) < 2:
             return 0.0
-        
-        # Sort the angles to determine the relative positions around the asset
-        angles.sort()
-        
-        # Add the first angle + 2*pi to the end to close the circle
-        angles.append(angles[0] + 2 * np.pi)
-        
-        # Compute the angular gaps between consecutive agents
-        gaps = np.diff(angles)
-        
-        # The minimum gap indicates the worst surrounding situation
-        max_gap = np.max(gaps)
-        
-        # Normalize the minimum gap to be between 0 and 1
-        # A small gap means the agents are more surrounding, so the score should be high
-        # A large gap means a worse surrounding, so the score should be low
-        max_possible_gap = 2 * np.pi  # The maximum possible gap is a full circle (2*pi radians)
-        score = 1 - (max_gap / max_possible_gap)
-        
-        return score
+
+        angles = np.arctan2(dy[mask], dx[mask])
+        angles = np.sort(angles)
+        angles = np.append(angles, angles[0] + 2 * np.pi)
+
+        max_gap = np.max(np.diff(angles))
+        return 1 - (max_gap / (2 * np.pi))
+
 
     def circle_fit_score(self, points, xc, yc, r):
         N = len(points)
