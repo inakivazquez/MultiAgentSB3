@@ -12,14 +12,13 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Train and evaluate swarm shape environment.")
     parser.add_argument("-c", "--communication_items", type=int, default=0, help="Number of communication items.")
-    parser.add_argument("-t", "--train", action='store_true', help="Train, otherwise test policy.")
-    parser.add_argument("-n", "--n_steps", type=int, default=100_000, help="Number of trainign steps.")
+    parser.add_argument("-t", "--train", type=int, help="Train for the steps provided.")
     parser.add_argument("-l", "--load", action='store_true', help="Load previous policy and continue training.")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.WARNING, format='%(levelname)s: %(message)s')
 
-    train = args.train
+    train = args.train is not None
     cube_load_previous_model = args.load
     if train:
         print("Training mode activated.")
@@ -28,21 +27,26 @@ if __name__ == "__main__":
     if cube_load_previous_model:
         print("Loading previous model.")
 
-    num_cubes = 16
+    num_cubes = 30
     num_assets = 1
     nrays = 20
     span_angle_degrees = 360
     communication_items = args.communication_items
 
-    prefix = f"multi_V3_{num_assets}s"
+    prefix = f"multi_V3_CL1_bs256_lr0.0001"
 
     experiment_name = f"proasset_{prefix}_c{communication_items}_{num_cubes}a_{nrays}r_{span_angle_degrees}"
     seed = 42
-    num_time_steps = args.n_steps
+    num_time_steps = args.train if train else 0
 
     cube_algo = PPO
 
-    cube_algo_params = {'policy': "MlpPolicy", 'seed': seed, 'verbose': 1, 'tensorboard_log': "./logs"}
+    cube_algo_params = {'policy': "MlpPolicy",
+                        'seed': seed,
+                        'verbose': 1,
+                        'batch_size': 256,
+                        'learning_rate': 0.0001,
+                        'tensorboard_log': "./logs"}
 
     cube_model_path = f"policies/proasset_{prefix}_model_c{communication_items}"
     #cube_model_path = "policies/current_model"
@@ -55,7 +59,7 @@ if __name__ == "__main__":
                   'span_angle_degrees': span_angle_degrees,
                   'obs_body_prefixes': ['asset', 'cube'],
                   'communication_items': communication_items,
-                  'circularity_required': 0.90}
+                  'surrounding_required': 0.90}
 
     if train:
         ma_env = SwarmProtectAssetEnv(**env_params, render_mode=None)

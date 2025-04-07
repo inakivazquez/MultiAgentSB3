@@ -5,7 +5,7 @@ import random
 import math
 
 class SwarmProtectAssetEnv(BaseSwarmEnv):
-    def __init__(self, num_assets = 1, circularity_required = 0.99, *args, **kwargs):
+    def __init__(self, num_assets = 1, surrounding_required = 0.99, *args, **kwargs):
         self.num_assets = num_assets # Important at this point as it is used to generate the XML in the parent class
         
         super().__init__(*args, **kwargs)
@@ -14,7 +14,7 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         for i in range(num_assets):
             self.asset_ids.append(mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, f"asset_{i}"))
 
-        self.circularity_required = circularity_required
+        self.surrounding_required = surrounding_required
         self.movement = False
 
     def reset_model(self):
@@ -43,7 +43,7 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         terminated = False
 
         agent_ids = list(self.agents)
-        
+
         # Initialize rewards dictionary
         rewards = dict.fromkeys(agent_ids, 0.0)
 
@@ -72,7 +72,7 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
                 asset_distance_required + asset_distance_margin
             )
             assets_surrounding_scores.append(score)
-            protection = score >= self.circularity_required
+            protection = score >= self.surrounding_required
             assets_protection_achieved.append(protection)
 
             if protection:
@@ -92,14 +92,19 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
             closest_idx = assets_close_to_agents_indices[i]
             closest_dist = assets_close_to_agents_distances[i]
             dist_score = np.exp(-abs(closest_dist - asset_distance_required))
+            
+            # Reward the agent for being close to the required distance to the asset
             rewards[agent_id] += dist_score / 10
 
+            # If the agent has better distance score than required, bonus based on surrouding score
             if dist_score >= distance_score_required:
                 rewards[agent_id] += 0.5 * assets_surrounding_scores[closest_idx]
 
+            # If the agent is participating in the successful protection of the asset, bonus
             if assets_protection_achieved[closest_idx]:
                 rewards[agent_id] += 0.5
 
+            # If all assets are protected, give a bonus
             if all_protected:
                 rewards[agent_id] += 1.0
 
