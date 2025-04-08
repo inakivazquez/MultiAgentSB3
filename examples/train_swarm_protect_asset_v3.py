@@ -62,7 +62,7 @@ if __name__ == "__main__":
                   'surrounding_required': 0.90}
 
     if train:
-        ma_env = SwarmProtectAssetEnv(**env_params, render_mode='human')
+        ma_env = SwarmProtectAssetEnv(**env_params, render_mode=None)
         ma_env = TimeLimitMAEnv(ma_env, max_episode_steps=500)
 
         model_algo_map = {'robot': (robot_algo, robot_algo_params)}

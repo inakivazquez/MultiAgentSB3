@@ -3,6 +3,7 @@ import numpy as np
 import mujoco
 import random
 import math
+import os
 
 class SwarmProtectAssetEnv(BaseSwarmEnv):
     def __init__(self, num_assets = 1, surrounding_required = 0.99, *args, **kwargs):
@@ -245,6 +246,7 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
     def generate_mujoco_xml(self, num_robots:int=1, shape:str='cube'):
 
         shape = 'disc'
+        current_dir = os.path.dirname(os.path.abspath(__file__))
 
         xml = f"""<mujoco model="swarm_robots">
         <option timestep="0.01" gravity="0 0 -9.81"/>
@@ -261,8 +263,8 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         </asset>
 
         <asset>
-            <mesh name="dome_mesh" file="/home/inaki/masb3/ma_sb3/envs/meshes/dome/dome.obj"  scale="1 1 0.5"/>
-            <mesh name="disc_dome_mesh" file="/home/inaki/masb3/ma_sb3/envs/meshes/dome/disc_with_dome.obj"  scale="1 1 0.5"/>
+            <mesh name="dome_mesh" file="{current_dir}/meshes/dome/dome.obj"  scale="1 1 0.5"/>
+            <mesh name="disc_dome_mesh" file="{current_dir}/meshes/dome/disc_with_dome.obj"  scale="1 1 0.5"/>
         </asset>
 
         <worldbody>
@@ -290,8 +292,6 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
             elif shape == 'disc':
                 xml += f"""
                 <body name="robot_{i}" pos="{x} {y} 0.004">
-                    <!-- <geom name="geom_robot_{i}" group="1" type="mesh" mesh="dome_mesh"
-                        rgba="{r} {g} {b} 1" density="5000" friction="0.01 0.01 0.01"/> -->
                     <geom name="geom_robot_{i}" group="1" type="cylinder" size="0.01 0.004"
                         rgba="{r} {g} {b} 1" density="5000" friction="0.01 0.01 0.01"/>
 
