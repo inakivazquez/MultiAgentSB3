@@ -19,45 +19,45 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.WARNING, format='%(levelname)s: %(message)s')
 
     train = args.train is not None
-    cube_load_previous_model = args.load
+    robot_load_previous_model = args.load
     if train:
         print("Training mode activated.")
     else:
         print("Testing mode activated.")
-    if cube_load_previous_model:
+    if robot_load_previous_model:
         print("Loading previous model.")
 
-    num_cubes = 30
-    num_assets = 1
+    num_robots = 80
+    num_assets = 2
     nrays = 20
     span_angle_degrees = 360
     communication_items = args.communication_items
 
     prefix = f"multi_V3_CL1_bs256_lr0.0001"
 
-    experiment_name = f"proasset_{prefix}_c{communication_items}_{num_cubes}a_{nrays}r_{span_angle_degrees}"
+    experiment_name = f"proasset_{prefix}_c{communication_items}_{num_robots}a_{nrays}r_{span_angle_degrees}"
     seed = 42
     num_time_steps = args.train if train else 0
 
-    cube_algo = PPO
+    robot_algo = PPO
 
-    cube_algo_params = {'policy': "MlpPolicy",
+    robot_algo_params = {'policy': "MlpPolicy",
                         'seed': seed,
                         'verbose': 1,
                         #'batch_size': 256,
                         'learning_rate': 0.0001,
                         'tensorboard_log': "./logs"}
 
-    cube_model_path = f"policies/proasset_{prefix}_model_c{communication_items}"
-    #cube_model_path = "policies/current_model"
+    robot_model_path = f"policies/proasset_{prefix}_model_c{communication_items}"
+    #robot_model_path = "policies/current_model"
 
-    env_params = {'num_cubes': num_cubes,
+    env_params = {'num_robots': num_robots,
                   'num_assets': num_assets,
                   'agent_speed': 0.1,
                   'forward_only': False,
                   'nrays': nrays,
                   'span_angle_degrees': span_angle_degrees,
-                  'obs_body_prefixes': ['asset', 'cube'],
+                  'obs_body_prefixes': ['asset', 'robot'],
                   'communication_items': communication_items,
                   'surrounding_required': 0.90}
 
@@ -65,11 +65,11 @@ if __name__ == "__main__":
         ma_env = SwarmProtectAssetEnv(**env_params, render_mode=None)
         ma_env = TimeLimitMAEnv(ma_env, max_episode_steps=500)
 
-        model_algo_map = {'cube': (cube_algo, cube_algo_params)}
+        model_algo_map = {'robot': (robot_algo, robot_algo_params)}
 
         models_to_load = {}
-        if cube_load_previous_model:
-            models_to_load['cube'] = cube_model_path
+        if robot_load_previous_model:
+            models_to_load['robot'] = robot_model_path
 
         models_to_train = '__all__'
 
@@ -80,9 +80,9 @@ if __name__ == "__main__":
 
         ma_env.close()
 
-        trained_models['cube'].save(cube_model_path)
-        if cube_algo in [SAC, TD3, DDPG, DQN]:
-            trained_models['cube'].save_replay_buffer(cube_model_path + ".pkl")
+        trained_models['robot'].save(robot_model_path)
+        if robot_algo in [SAC, TD3, DDPG, DQN]:
+            trained_models['robot'].save_replay_buffer(robot_model_path + ".pkl")
         
 
     if train  == True:
@@ -92,8 +92,8 @@ if __name__ == "__main__":
     ma_env = SwarmProtectAssetEnv(**env_params, render_mode=render_mode)
     ma_env = TimeLimitMAEnv(ma_env, max_episode_steps=500)
 
-    model_cube = cube_algo.load(cube_model_path)
-    models = {'cube':model_cube}
+    model_robot = robot_algo.load(robot_model_path)
+    models = {'robot':model_robot}
 
     total_episodes = 10
 

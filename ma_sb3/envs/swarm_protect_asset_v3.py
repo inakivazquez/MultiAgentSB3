@@ -50,7 +50,7 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         # Step 1: Calculate asset possitions and agent positions
         asset_positions = np.array([self.data.xpos[aid][:2] for aid in self.asset_ids])
         agent_positions = np.array([
-            self.data.xpos[self.mujoco_cube_ids[aid]][:2] for aid in agent_ids
+            self.data.xpos[self.mujoco_robot_ids[aid]][:2] for aid in agent_ids
         ])
 
         # Step 1.1: Compute closest assets to agents
@@ -75,14 +75,18 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
             protection = score >= self.surrounding_required
             assets_protection_achieved.append(protection)
 
+            asset_id = self.asset_ids[i]
             if protection:
                 print(f"Achieved protection for asset {i}: {score}!")
+                self.model.geom_rgba[asset_id] = np.array([0, 0.8, 0, 0.4])
+            else:
+                self.model.geom_rgba[asset_id] = np.array([0.2, 0.2, 0.8, 0.4])
 
         all_protected = all(assets_protection_achieved)
 
         # Step 3: Compute agent rewards
         for i, agent_id in enumerate(agent_ids):
-            body_id = self.mujoco_cube_ids[agent_id]
+            body_id = self.mujoco_robot_ids[agent_id]
 
             move = self.active_movements.get(body_id)
             if move:
@@ -118,21 +122,21 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
 
 
     def get_observation(self, agent_id):
-        mujoco_cube_id = self.mujoco_cube_ids[agent_id]
-        detected_body_ids, normalized_distances = self.perform_raycast(mujoco_cube_id)
+        mujoco_robot_id = self.mujoco_robot_ids[agent_id]
+        detected_body_ids, normalized_distances = self.perform_raycast(mujoco_robot_id)
         ray_obs = np.zeros((self.nrays, 3+self.communication_items), dtype=np.float32)
         for i, detected_body_id in enumerate(detected_body_ids):
             if detected_body_id in self.asset_ids:
                 ray_obs[i][0] = 1
                 ray_obs[i][2] = normalized_distances[i]
-            # If the detected body is a cube different from the agent's cube
-            if detected_body_id in self.mujoco_cube_ids.values() and detected_body_id != mujoco_cube_id:
-                ray_obs[i][1] = 1 # Flag for cube detected
+            # If the detected body is a robot different from the agent's robot
+            if detected_body_id in self.mujoco_robot_ids.values() and detected_body_id != mujoco_robot_id:
+                ray_obs[i][1] = 1 # Flag for robot detected
                 ray_obs[i][2] = normalized_distances[i]
                 if self.communication_items > 0:
                     ray_obs[i][3:3+self.communication_items] = self.agent_comm_messages[detected_body_id] # Communication message from the agent
             # For debugging
-            if False and detected_body_id != -1 and detected_body_id != mujoco_cube_id:
+            if False and detected_body_id != -1 and detected_body_id != mujoco_robot_id:
                 body_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, detected_body_id)
                 print(f"Ray {i} from {agent_id} hit {body_name} at {normalized_distances[i]}")
 
@@ -232,9 +236,11 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
             self.data.xfrc_applied[asset_id, :3] = force  
 
     # Generate XML for MuJoCo
-    def generate_mujoco_xml(self, num_cubes:int=1, shape:str='disc'):
+    def generate_mujoco_xml(self, num_robots:int=1, shape:str='cube'):
 
-        xml = f"""<mujoco model="swarm_cubes">
+        shape = 'disc'
+
+        xml = f"""<mujoco model="swarm_robots">
         <option timestep="0.01" gravity="0 0 -9.81"/>
         <visual>
             <headlight diffuse="0.8 0.8 0.8" ambient="0.8 0.8 0.8" specular="0 0 0"/>
@@ -256,8 +262,8 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         <worldbody>
             <geom name="floor" size="0 0 0.05" type="plane" material="groundplane" friction="0.01 0.01 0.01"/>"""
 
-        # Generate random cubes
-        for i in range(num_cubes):
+        # Generate random robots
+        for i in range(num_robots):
             # In the case of joint slide, the position is relative to the parent body
             # So we need to set the position of the parent body to 0, 0, 0
             x, y = 0, 0
@@ -265,27 +271,27 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
 
             if shape == 'cube':
                 xml += f"""
-                <body name="cube_{i}" pos="{x} {y} 0.01">
-                    <geom name="geom_cube_{i}" group="1" type="box" size="0.01 0.01 0.01"
+                <body name="robot_{i}" pos="{x} {y} 0.01">
+                    <geom name="geom_robot_{i}" group="1" type="box" size="0.01 0.01 0.01"
                         rgba="{r} {g} {b} 1" density="5000" friction="0.01 0.01 0.01"/>
-                    <joint name="cube_{i}_slide_x" type="slide" axis="1 0 0"/> <!-- Move along X -->
-                    <joint name="cube_{i}_slide_y" type="slide" axis="0 1 0"/> <!-- Move along Y -->
-                    <joint name="cube_{i}_yaw" type="hinge" axis="0 0 1"/>  <!-- Rotate around Z -->
+                    <joint name="robot_{i}_slide_x" type="slide" axis="1 0 0"/> <!-- Move along X -->
+                    <joint name="robot_{i}_slide_y" type="slide" axis="0 1 0"/> <!-- Move along Y -->
+                    <joint name="robot_{i}_yaw" type="hinge" axis="0 0 1"/>  <!-- Rotate around Z -->
                     <body name="direction_indicator_{i}" pos="0.01 0 0">
                         <geom name="indicator_{i}" type="cylinder" size="0.003 0.00001" rgba="1 1 1 1" euler="0 90 0" density="0"/>
                     </body>            
                 </body>"""
             elif shape == 'disc':
                 xml += f"""
-                <body name="cube_{i}" pos="{x} {y} 0.004">
-                    <!-- <geom name="geom_cube_{i}" group="1" type="mesh" mesh="dome_mesh"
+                <body name="robot_{i}" pos="{x} {y} 0.004">
+                    <!-- <geom name="geom_robot_{i}" group="1" type="mesh" mesh="dome_mesh"
                         rgba="{r} {g} {b} 1" density="5000" friction="0.01 0.01 0.01"/> -->
-                    <geom name="geom_cube_{i}" group="1" type="cylinder" size="0.01 0.004"
+                    <geom name="geom_robot_{i}" group="1" type="cylinder" size="0.01 0.004"
                         rgba="{r} {g} {b} 1" density="5000" friction="0.01 0.01 0.01"/>
 
-                    <joint name="cube_{i}_slide_x" type="slide" axis="1 0 0"/> <!-- Move along X -->
-                    <joint name="cube_{i}_slide_y" type="slide" axis="0 1 0"/> <!-- Move along Y -->
-                    <joint name="cube_{i}_yaw" type="hinge" axis="0 0 1"/>  <!-- Rotate around Z -->
+                    <joint name="robot_{i}_slide_x" type="slide" axis="1 0 0"/> <!-- Move along X -->
+                    <joint name="robot_{i}_slide_y" type="slide" axis="0 1 0"/> <!-- Move along Y -->
+                    <joint name="robot_{i}_yaw" type="hinge" axis="0 0 1"/>  <!-- Rotate around Z -->
 
                     <body name="direction_indicator_{i}" pos="0.01 0 0">
                         <geom name="indicator_{i}" type="cylinder" size="0.002 0.00001" rgba="1 1 1 1" euler="0 90 0" density="0"/>
@@ -293,13 +299,13 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
                 </body>"""
             elif shape == 'dome':
                 xml += f"""
-                <body name="cube_{i}" pos="{x} {y} 0.001">
-                    <geom name="geom_cube_{i}" group="1" type="mesh" mesh="disc_dome_mesh"
+                <body name="robot_{i}" pos="{x} {y} 0.001">
+                    <geom name="geom_robot_{i}" group="1" type="mesh" mesh="disc_dome_mesh"
                         rgba="{r} {g} {b} 1" density="5000" friction="0.01 0.01 0.01"/>
 
-                    <joint name="cube_{i}_slide_x" type="slide" axis="1 0 0"/> <!-- Move along X -->
-                    <joint name="cube_{i}_slide_y" type="slide" axis="0 1 0"/> <!-- Move along Y -->
-                    <joint name="cube_{i}_yaw" type="hinge" axis="0 0 1"/>  <!-- Rotate around Z -->
+                    <joint name="robot_{i}_slide_x" type="slide" axis="1 0 0"/> <!-- Move along X -->
+                    <joint name="robot_{i}_slide_y" type="slide" axis="0 1 0"/> <!-- Move along Y -->
+                    <joint name="robot_{i}_yaw" type="hinge" axis="0 0 1"/>  <!-- Rotate around Z -->
 
                     <body name="direction_indicator_{i}" pos="0.01 0 0.002">
                         <geom name="indicator_{i}" type="cylinder" size="0.002 0.00001" rgba="1 1 1 1" euler="0 60 0" density="0"/>
@@ -311,7 +317,7 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
             xml += f"""       
                 <body name="asset_{i}" pos="{x} {y} 0.1">
                     <joint type="free"/> 
-                    <geom name="geom_asset_{i}" group="1" type="cylinder" size="0.05 0.05" rgba="0.0 0.8 0.0 0.4" density="5000" friction="0.01 0.01 0.01"/>
+                    <geom name="geom_asset_{i}" group="1" type="cylinder" size="0.05 0.05" rgba="0.5 0.5 0.9 0.4" density="5000" friction="0.01 0.01 0.01"/>
                 </body>"""
         
         xml += f"""
