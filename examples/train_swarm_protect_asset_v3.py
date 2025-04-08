@@ -7,6 +7,16 @@ import logging
 from stable_baselines3.common.env_util import make_vec_env
 import argparse
 
+import json
+
+def save_hyperparameters(hyperparams, file):
+    """
+    Save hyperparameters to a JSON file.
+    """
+    with open(file, 'w') as f:
+        json.dump(hyperparams, f, indent=4)
+
+
 # Example of running the environment
 if __name__ == "__main__":
 
@@ -33,9 +43,9 @@ if __name__ == "__main__":
     span_angle_degrees = 360
     communication_items = args.communication_items
 
-    prefix = f"multi_V3_CL1_bs256_lr0.0001"
+    prefix = f"multi_V4_CL1_bs256_lr0.0001"
 
-    experiment_name = f"proasset_{prefix}_c{communication_items}_{num_robots}a_{nrays}r_{span_angle_degrees}"
+    experiment_name = f"{prefix}_c{communication_items}_{num_robots}a_{nrays}r_{span_angle_degrees}"
     seed = 42
     num_time_steps = args.train if train else 0
 
@@ -44,12 +54,14 @@ if __name__ == "__main__":
     robot_algo_params = {'policy': "MlpPolicy",
                         'seed': seed,
                         'verbose': 1,
-                        #'batch_size': 256,
+                        'batch_size': 256,
                         'learning_rate': 0.0001,
                         'tensorboard_log': "./logs"}
 
-    robot_model_path = f"policies/proasset_{prefix}_model_c{communication_items}"
+    robot_model_path = f"policies/{prefix}_model_c{communication_items}"
     #robot_model_path = "policies/current_model"
+
+    save_hyperparameters(robot_algo_params, robot_model_path + "_hyperparams.json")
 
     env_params = {'num_robots': num_robots,
                   'num_assets': num_assets,

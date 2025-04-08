@@ -229,7 +229,7 @@ class MultiBlockPushRayCom(MujocoEnv, BaseMAEnv):
             # Execute the simulation step for all elements
             self.do_simulation(self.data.ctrl, self.frame_skip)
 
-    def get_env_state_results(self):
+    def evaluate_env_state(self):
         truncated = False
         rewards = {}
         infos = {}   

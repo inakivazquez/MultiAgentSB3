@@ -149,7 +149,7 @@ class PredatorPreyMAEnv(BaseMAEnv):
         return np.append(this_position, distance_vector_to_the_rival)
         """
 
-    def get_env_state_results(self):
+    def evaluate_env_state(self):
         truncated = False
         rewards = {'predator': 0, 'prey': 0}
         infos = {}   

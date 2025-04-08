@@ -38,9 +38,7 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
 
         self.assets_protection_achieved = [False] * len(self.asset_ids)
 
-
-
-    def get_env_state_results(self):
+    def evaluate_env_state(self):
         truncated = False
         rewards = {}
         infos = {}   

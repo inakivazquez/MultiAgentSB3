@@ -91,12 +91,16 @@ class BaseMAEnv():
         return other_agents_predictions
 
     def get_state(self):
-         obs = {}
-         for agent_id in self.agents.keys():
-             obs[agent_id] = self.get_observation(agent_id)
-         rewards, terminated, truncated, infos = self.get_env_state_results()
-         self.previous_observation = obs # Required for the multi-agent step process, we need to reuse the previous observation
-         return obs, rewards, terminated, truncated, infos
+        # Evaluate the state of the environment, part of this informaton may be used to get observations
+        rewards, terminated, truncated, infos = self.evaluate_env_state()
+
+        # Get the observations for all agents
+        obs = {}
+        for agent_id in self.agents.keys():
+            obs[agent_id] = self.get_observation(agent_id)
+
+        self.previous_observation = obs # Required for the multi-agent step process, we need to reuse the previous observation
+        return obs, rewards, terminated, truncated, infos
 
     def close(self):
         # Closes the environment
@@ -118,7 +122,7 @@ class BaseMAEnv():
         # Must be implemented, even if it is just a 'pass' if no synchronization is needed
         raise NotImplementedError
 
-    def get_env_state_results(self):
+    def evaluate_env_state(self):
         # For the current state of the environment, it must return rewards, terminated, truncated, infos
         raise NotImplementedError
 
@@ -169,7 +173,7 @@ class TimeLimitMAEnv(BaseMAEnv):
     def get_state(self):
         return self.env.get_full_state()
 
-    def get_env_state_results(self):
+    def evaluate_env_state(self):
         return self.env.get_env_full_state()
 
     def close(self):

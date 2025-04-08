@@ -186,7 +186,7 @@ class MultiPredatorPreyMAEnv(BaseMAEnv):
         obs = np.append(obs, raycast_data)
         return obs
 
-    def get_env_state_results(self):
+    def evaluate_env_state(self):
         truncated = False
         rewards = {}
         infos = {}   

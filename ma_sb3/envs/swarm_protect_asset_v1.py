@@ -31,7 +31,7 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
             self.set_camera_at(x, y)
 
 
-    def get_env_state_results(self):
+    def evaluate_env_state(self):
         truncated = False
         rewards = {}
         infos = {}   

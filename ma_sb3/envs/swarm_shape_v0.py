@@ -7,7 +7,7 @@ class SwarmShapeEnv(BaseSwarmEnv):
         super().__init__(*args, **kwargs)
         self.asset_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "asset")
 
-    def get_env_state_results(self):
+    def evaluate_env_state(self):
         truncated = False
         rewards = {}
         infos = {}   

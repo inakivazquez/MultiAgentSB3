@@ -36,7 +36,7 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         super().reset_model()
 
 
-    def get_env_state_results(self):
+    def evaluate_env_state(self):
         truncated = False
         rewards = {}
         infos = {}   

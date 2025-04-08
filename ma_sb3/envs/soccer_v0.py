@@ -276,7 +276,7 @@ class SoccerEnv(BaseMAEnv):
 
         return obs
 
-    def get_env_state_results(self):
+    def evaluate_env_state(self):
         truncated = False
         rewards = {}
         infos = {}   
