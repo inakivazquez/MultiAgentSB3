@@ -35,6 +35,9 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         # Now generate the agents
         super().reset_model()
 
+        self.assets_protection_achieved = [False] * len(self.asset_ids)
+
+
 
     def get_env_state_results(self):
         truncated = False
@@ -61,7 +64,7 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         asset_distance_margin = 0.1
         distance_score_required = 0.9
 
-        assets_protection_achieved = []
+        self.assets_protection_achieved = []
         assets_surrounding_scores = []
 
         for i, asset_pos in enumerate(asset_positions):
@@ -73,16 +76,16 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
             )
             assets_surrounding_scores.append(score)
             protection = score >= self.surrounding_required
-            assets_protection_achieved.append(protection)
+            self.assets_protection_achieved.append(protection)
 
             asset_id = self.asset_ids[i]
             if protection:
                 print(f"Achieved protection for asset {i}: {score}!")
                 self.model.geom_rgba[asset_id] = np.array([0, 0.8, 0, 0.4])
             else:
-                self.model.geom_rgba[asset_id] = np.array([0.2, 0.2, 0.8, 0.4])
+                self.model.geom_rgba[asset_id] = np.array([0.0, 0.6, 0.8, 0.4])
 
-        all_protected = all(assets_protection_achieved)
+        all_protected = all(self.assets_protection_achieved)
 
         # Step 3: Compute agent rewards
         for i, agent_id in enumerate(agent_ids):
@@ -105,7 +108,7 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
                 rewards[agent_id] += 0.5 * assets_surrounding_scores[closest_idx]
 
             # If the agent is participating in the successful protection of the asset, bonus
-            if assets_protection_achieved[closest_idx]:
+            if self.assets_protection_achieved[closest_idx]:
                 rewards[agent_id] += 0.5
 
             # If all assets are protected, give a bonus
@@ -124,17 +127,20 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
     def get_observation(self, agent_id):
         mujoco_robot_id = self.mujoco_robot_ids[agent_id]
         detected_body_ids, normalized_distances = self.perform_raycast(mujoco_robot_id)
-        ray_obs = np.zeros((self.nrays, 3+self.communication_items), dtype=np.float32)
+        ray_obs = np.zeros((self.nrays, 4+self.communication_items), dtype=np.float32)
         for i, detected_body_id in enumerate(detected_body_ids):
-            if detected_body_id in self.asset_ids:
-                ray_obs[i][0] = 1
-                ray_obs[i][2] = normalized_distances[i]
             # If the detected body is a robot different from the agent's robot
+            ray_obs[i][0] = normalized_distances[i]
             if detected_body_id in self.mujoco_robot_ids.values() and detected_body_id != mujoco_robot_id:
                 ray_obs[i][1] = 1 # Flag for robot detected
-                ray_obs[i][2] = normalized_distances[i]
                 if self.communication_items > 0:
-                    ray_obs[i][3:3+self.communication_items] = self.agent_comm_messages[detected_body_id] # Communication message from the agent
+                    ray_obs[i][4:4+self.communication_items] = self.agent_comm_messages[detected_body_id] # Communication message from the agent
+            if detected_body_id in self.asset_ids:
+                asset_idx = self.asset_ids.index(detected_body_id)
+                if self.assets_protection_achieved[asset_idx]:
+                    ray_obs[i][2] = 1 # Flag for asset detected and protected
+                else:
+                    ray_obs[i][3] = 1 # Flag for asset detected and not protected
             # For debugging
             if False and detected_body_id != -1 and detected_body_id != mujoco_robot_id:
                 body_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, detected_body_id)

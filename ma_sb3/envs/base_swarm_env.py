@@ -75,11 +75,11 @@ class BaseSwarmEnv(MujocoEnv, BaseMAEnv):
         
         for i in range(num_robots):
             # Observation space
-            # One-hot for each type of body, then distance to the body and communication items
+            # Distance to body, then one-hot for each type of body and communication items
             observation_space = gym.spaces.Box(
-                low=np.array(([0]*obs_num_bodies + [0] + [-1] * self.communication_items) * self.nrays, dtype=np.float32),
-                high=np.array(([0]*obs_num_bodies + [1] + [1] * self.communication_items) * self.nrays, dtype=np.float32),
-                shape=((3+self.communication_items)*self.nrays,))
+                low=np.array(([0] + [0]*obs_num_bodies + [-1] * self.communication_items) * self.nrays, dtype=np.float32),
+                high=np.array(([1] + [1]*obs_num_bodies + [1] * self.communication_items) * self.nrays, dtype=np.float32),
+                shape=((1 + obs_num_bodies + self.communication_items)*self.nrays,))
             # Action space
             low_limit = 0 if self.forward_only else -1
             action_space = gym.spaces.Box(

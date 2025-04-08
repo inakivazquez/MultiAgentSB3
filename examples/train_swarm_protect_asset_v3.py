@@ -1,4 +1,4 @@
-from ma_sb3.envs.swarm_protect_asset_v2 import SwarmProtectAssetEnv
+from ma_sb3.envs.swarm_protect_asset_v3 import SwarmProtectAssetEnv
 from ma_sb3 import TimeLimitMAEnv
 from ma_sb3.utils import ma_train, ma_evaluate
 
@@ -27,8 +27,8 @@ if __name__ == "__main__":
     if robot_load_previous_model:
         print("Loading previous model.")
 
-    num_robots = 80
-    num_assets = 2
+    num_robots = 30
+    num_assets = 1
     nrays = 20
     span_angle_degrees = 360
     communication_items = args.communication_items
@@ -57,12 +57,12 @@ if __name__ == "__main__":
                   'forward_only': False,
                   'nrays': nrays,
                   'span_angle_degrees': span_angle_degrees,
-                  'obs_body_prefixes': ['asset', 'robot'],
+                  'obs_body_prefixes': ['robot', 'asset','asset'], # We declare asset twice to cover the cases of asset surrouneded or not
                   'communication_items': communication_items,
                   'surrounding_required': 0.90}
 
     if train:
-        ma_env = SwarmProtectAssetEnv(**env_params, render_mode=None)
+        ma_env = SwarmProtectAssetEnv(**env_params, render_mode='human')
         ma_env = TimeLimitMAEnv(ma_env, max_episode_steps=500)
 
         model_algo_map = {'robot': (robot_algo, robot_algo_params)}
