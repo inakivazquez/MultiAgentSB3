@@ -9,12 +9,13 @@ import argparse
 
 import json
 
-def save_hyperparameters(hyperparams, file):
+def save_parameters(hyperparams, env_params, file):
     """
     Save hyperparameters to a JSON file.
     """
     with open(file, 'w') as f:
         json.dump(hyperparams, f, indent=4)
+        json.dump(env_params, f, indent=4)
 
 
 # Example of running the environment
@@ -43,7 +44,7 @@ if __name__ == "__main__":
     span_angle_degrees = 360
     communication_items = args.communication_items
 
-    prefix = f"multi_V4_CL1_bs256_lr0.0001_cube"
+    prefix = f"multi_V4_CL1_bs256_lr0.0001_cube_pen"
 
     experiment_name = f"{prefix}_c{communication_items}_{num_robots}a_{nrays}r_{span_angle_degrees}"
     seed = 42
@@ -61,8 +62,6 @@ if __name__ == "__main__":
     robot_model_path = f"policies/{prefix}_model_c{communication_items}"
     #robot_model_path = "policies/current_model"
 
-    save_hyperparameters(robot_algo_params, robot_model_path + "_hyperparams.json")
-
     env_params = {'num_robots': num_robots,
                   'num_assets': num_assets,
                   'agent_speed': 0.1,
@@ -71,9 +70,12 @@ if __name__ == "__main__":
                   'span_angle_degrees': span_angle_degrees,
                   'obs_body_prefixes': ['robot', 'asset','asset'], # We declare asset twice to cover the cases of asset surrouneded or not
                   'communication_items': communication_items,
-                  'surrounding_required': 0.90}
+                  'surrounding_required': 0.90,
+                  'asset_move_force': 0}
 
     if train:
+        save_parameters(robot_algo_params, env_params, robot_model_path + "_params.json")
+
         ma_env = SwarmProtectAssetEnv(**env_params, render_mode=None)
         ma_env = TimeLimitMAEnv(ma_env, max_episode_steps=500)
 
@@ -107,11 +109,13 @@ if __name__ == "__main__":
     model_robot = robot_algo.load(robot_model_path)
     models = {'robot':model_robot}
 
-    total_episodes = 10
+    total_episodes = 1
 
     print(f"Evaluating models for {total_episodes} episodes...")
     avg_agent, avg_model = ma_evaluate(ma_env, models, total_episodes=total_episodes, verbose=True)
 
     print(f"Average rewards per agent:\n {avg_agent}")
     print(f"Average rewards per model:\n {avg_model}")
+
+    ma_env.close()
        

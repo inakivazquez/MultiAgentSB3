@@ -6,7 +6,7 @@ import math
 import os
 
 class SwarmProtectAssetEnv(BaseSwarmEnv):
-    def __init__(self, num_assets = 1, surrounding_required = 0.99, *args, **kwargs):
+    def __init__(self, num_assets = 1, surrounding_required = 0.99, asset_move_force = 0, *args, **kwargs):
         self.num_assets = num_assets # Important at this point as it is used to generate the XML in the parent class
         
         super().__init__(*args, **kwargs)
@@ -16,7 +16,7 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
             self.asset_ids.append(mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, f"asset_{i}"))
 
         self.surrounding_required = surrounding_required
-        self.movement = False
+        self.asset_move_force = asset_move_force
 
     def reset_model(self):
         # Create the asset in a random position
@@ -29,6 +29,11 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         # Generate random positions for all assets
         for asset_id in self.asset_ids:
             x, y = random_pos()
+            # Check that no existing asset is too close to the new one
+            for other_asset_id in self.asset_ids:
+                if other_asset_id != asset_id:
+                    while np.linalg.norm(np.array([x, y]) - np.array(self.data.xpos[other_asset_id][:2])) < 0.2:
+                        x, y = random_pos()
 
             asset_qpos_addr = self.model.jnt_qposadr[self.model.body_jntadr[asset_id]]
             self.data.qpos[asset_qpos_addr:asset_qpos_addr+3] = [x, y, 0.1]
@@ -107,7 +112,6 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
             # Penalty if the agent is too close to another agent
             if agents_with_close_neighbors[i]:
                 rewards[agent_id] -= 0.1
-                print("Penalty")
             
             # Reward the agent for being close to the required distance to the asset
             rewards[agent_id] += dist_score / 10
@@ -127,7 +131,7 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         if all_protected:
             print("All assets are protected!")
 
-        if self.movement:
+        if self.asset_move_force > 0:
             self.push_assets_random()
 
         return rewards, terminated, truncated, infos
@@ -224,10 +228,11 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         self.mujoco_renderer.viewer.cam.lookat[1] = y
 
     def push_assets_random(self):
+        force_strength = self.asset_move_force
         for asset_id in self.asset_ids:
             self.data.xfrc_applied[asset_id, :] = 0  # Reset external forces
             # Apply force (only first three elements, last three are torque)
-            force = np.random.uniform(-0.5, 0.5, size=3)  # Random force in x, y
+            force = np.random.uniform(-force_strength, +force_strength, size=3)  # Random force in x, y
             force[2] = 0
             self.data.xfrc_applied[asset_id, :3] = force  
 
