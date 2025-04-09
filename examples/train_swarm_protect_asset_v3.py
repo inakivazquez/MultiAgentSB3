@@ -43,7 +43,7 @@ if __name__ == "__main__":
     span_angle_degrees = 360
     communication_items = args.communication_items
 
-    prefix = f"multi_V4_CL1_bs256_lr0.0001"
+    prefix = f"multi_V4_CL1_bs256_lr0.0001_cube"
 
     experiment_name = f"{prefix}_c{communication_items}_{num_robots}a_{nrays}r_{span_angle_degrees}"
     seed = 42

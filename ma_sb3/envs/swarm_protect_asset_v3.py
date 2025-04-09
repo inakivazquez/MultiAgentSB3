@@ -44,6 +44,11 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         infos = {}   
         terminated = False
 
+        asset_distance_required = 0.2
+        asset_distance_margin = 0.1
+        distance_score_required = 0.9
+        min_distance_between_agents = 0.02 # center to center distance
+
         agent_ids = list(self.agents)
 
         # Initialize rewards dictionary
@@ -55,13 +60,13 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
             self.data.xpos[self.mujoco_robot_ids[aid]][:2] for aid in agent_ids
         ])
 
-        # Step 1.1: Compute closest assets to agents
+        # Step 1.1: Check if agents are close to each other
+        agents_with_close_neighbors = self.compute_agents_with_neighbors_within_distance(agent_positions, min_distance_between_agents)
+
+        # Step 1.2: Compute closest assets to agents
         assets_close_to_agents_indices, assets_close_to_agents_distances = self.compute_closest_assets_to_agents(agent_positions, asset_positions)
 
         # Step 2: Evaluate asset protection conditions
-        asset_distance_required = 0.2
-        asset_distance_margin = 0.1
-        distance_score_required = 0.9
 
         self.assets_protection_achieved = []
         assets_surrounding_scores = []
@@ -98,6 +103,11 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
             closest_idx = assets_close_to_agents_indices[i]
             closest_dist = assets_close_to_agents_distances[i]
             dist_score = np.exp(-abs(closest_dist - asset_distance_required))
+
+            # Penalty if the agent is too close to another agent
+            if agents_with_close_neighbors[i]:
+                rewards[agent_id] -= 0.1
+                print("Penalty")
             
             # Reward the agent for being close to the required distance to the asset
             rewards[agent_id] += dist_score / 10
@@ -185,48 +195,29 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         return 1 - (max_gap / (2 * np.pi))
 
 
-    def circle_fit_score(self, points, xc, yc, r):
-        N = len(points)
-                
-        # Convert points to numpy array
-        points = np.array(points)
-        
-        # Compute distances from center
-        distances = np.sqrt((points[:, 0] - xc) ** 2 + (points[:, 1] - yc) ** 2)
-        
-        # Radial deviation score (1 means all points are on the circle)
-        radial_deviation = np.abs(distances - r)
-        radial_score = np.exp(-np.var(distances - r))
-        
-        # Compute angles
-        angles = np.arctan2(points[:, 1] - yc, points[:, 0] - xc)
-        sorted_indices = np.argsort(angles)
-        angles_sorted = angles[sorted_indices]
-        
-        # Compute pairwise angle differences
-        angle_diffs = np.diff(np.concatenate(([angles_sorted[-1] - 2 * np.pi], angles_sorted)))
-        
-        # Expected uniform angle spacing
-        expected_spacing = 2 * np.pi / N
-        
-        # Angular uniformity score
-        angular_score = np.exp(-np.var(angle_diffs - expected_spacing))
-        
-        # Compute individual point scores
-        distance_scores = np.exp(-radial_deviation)  # Higher means closer to ideal radius
-        
-        # Normalize angular distances
-        angular_distances = np.abs(angle_diffs - expected_spacing)
-        angular_scores = np.exp(-angular_distances)  # Higher means closer to uniform spacing
-        
-        # Final score as geometric mean
-        final_score = np.sqrt(radial_score * angular_score)
+    def compute_agents_with_neighbors_within_distance(self, agent_positions: np.ndarray, min_distance: float) -> np.ndarray:
+        """
+        Determines whether each agent has at least one other agent within a given minimum distance.
 
-        # Reorder with original indices
-        angular_scores[sorted_indices] = angular_scores
-        
-        return final_score, distance_scores, angular_scores
+        Parameters:
+        - agent_positions: np.ndarray of shape (N, 2), where each row is the (x, y) position of an agent.
+        - min_distance: float, the distance threshold to consider another agent as 'close'.
 
+        Returns:
+        - np.ndarray of shape (N,), with True if an agent has any neighbor within min_distance, False otherwise.
+        """
+        num_agents = agent_positions.shape[0]
+        close_flags = np.zeros(num_agents, dtype=bool)
+
+        for i in range(num_agents):
+            # Compute distance from agent i to all other agents
+            distances = np.linalg.norm(agent_positions[i] - agent_positions, axis=1)
+            # Exclude distance to self (which is 0)
+            distances[i] = np.inf
+            # Check if any other agent is within the min_distance
+            close_flags[i] = np.any(distances <= min_distance)
+
+        return close_flags
 
     def set_camera_at(self, x, y):
         self.mujoco_renderer.viewer.cam.lookat[0] = x
@@ -243,7 +234,7 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
     # Generate XML for MuJoCo
     def generate_mujoco_xml(self, num_robots:int=1, shape:str='cube'):
 
-        shape = 'disc'
+        shape = 'cube'
         current_dir = os.path.dirname(os.path.abspath(__file__))
 
         xml = f"""<mujoco model="swarm_robots">
