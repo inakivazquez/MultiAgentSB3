@@ -44,7 +44,7 @@ if __name__ == "__main__":
     span_angle_degrees = 360
     communication_items = args.communication_items
 
-    prefix = f"multi_V4_CL1_bs256_lr0.0001_cube_pen"
+    prefix = f"multi_V4_EXP2"
 
     experiment_name = f"{prefix}_c{communication_items}_{num_robots}a_{nrays}r_{span_angle_degrees}"
     seed = 42
@@ -55,12 +55,10 @@ if __name__ == "__main__":
     robot_algo_params = {'policy': "MlpPolicy",
                         'seed': seed,
                         'verbose': 1,
-                        'batch_size': 256,
                         'learning_rate': 0.0001,
                         'tensorboard_log': "./logs"}
 
     robot_model_path = f"policies/{prefix}_model_c{communication_items}"
-    #robot_model_path = "policies/current_model"
 
     env_params = {'num_robots': num_robots,
                   'num_assets': num_assets,
@@ -68,7 +66,7 @@ if __name__ == "__main__":
                   'forward_only': False,
                   'nrays': nrays,
                   'span_angle_degrees': span_angle_degrees,
-                  'obs_body_prefixes': ['robot', 'asset','asset'], # We declare asset twice to cover the cases of asset surrouneded or not
+                  'obs_body_prefixes': ['robot', 'asset'], # We declare asset twice to cover the cases of asset surrouneded or not
                   'communication_items': communication_items,
                   'surrounding_required': 0.90,
                   'asset_move_force': 0}
