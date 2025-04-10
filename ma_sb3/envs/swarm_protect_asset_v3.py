@@ -6,7 +6,7 @@ import math
 import os
 
 class SwarmProtectAssetEnv(BaseSwarmEnv):
-    def __init__(self, num_assets = 1, surrounding_required = 0.99, asset_move_force = 0, *args, **kwargs):
+    def __init__(self, num_assets = 1, surrounding_required = 0.99, asset_move_force = 0, verbose=False,  *args, **kwargs):
         self.num_assets = num_assets # Important at this point as it is used to generate the XML in the parent class
         
         super().__init__(*args, **kwargs)
@@ -17,6 +17,7 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
 
         self.surrounding_required = surrounding_required
         self.asset_move_force = asset_move_force
+        self.verbose = verbose
 
     def reset_model(self):
         # Create the asset in a random position
@@ -89,7 +90,8 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
 
             asset_id = self.asset_ids[i]
             if protection:
-                print(f"Achieved protection for asset {i}: {score}!")
+                if self.verbose:
+                    print(f"Achieved protection for asset {i}: {score}!")
                 self.model.geom_rgba[asset_id] = np.array([0, 0.8, 0, 0.4])
             else:
                 self.model.geom_rgba[asset_id] = np.array([0.0, 0.6, 0.8, 0.4])
@@ -129,7 +131,8 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
                 rewards[agent_id] += 1.0
 
         if all_protected:
-            print("All assets are protected!")
+            if self.verbose:
+                print("All assets are protected!")
 
         if self.asset_move_force > 0:
             self.push_assets_random()

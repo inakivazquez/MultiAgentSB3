@@ -50,15 +50,16 @@ if __name__ == "__main__":
     seed = 42
     num_time_steps = args.train if train else 0
 
-    robot_algo = PPO
+    robot_algo = SAC
 
     robot_algo_params = {'policy': "MlpPolicy",
                         'seed': seed,
                         'verbose': 1,
-                        'learning_rate': 0.0001,
+                        #'learning_rate': 1e-5,
                         'tensorboard_log': "./logs"}
 
     robot_model_path = f"policies/{prefix}_model_c{communication_items}"
+    robot_model_path = f"policies/multi_V4_EXP2_model_c{communication_items}"
 
     env_params = {'num_robots': num_robots,
                   'num_assets': num_assets,
@@ -66,7 +67,7 @@ if __name__ == "__main__":
                   'forward_only': False,
                   'nrays': nrays,
                   'span_angle_degrees': span_angle_degrees,
-                  'obs_body_prefixes': ['robot', 'asset'], # We declare asset twice to cover the cases of asset surrouneded or not
+                  'obs_body_prefixes': ['robot', 'asset', 'asset'], # We declare asset twice to cover the cases of asset surrouneded or not
                   'communication_items': communication_items,
                   'surrounding_required': 0.90,
                   'asset_move_force': 0}
