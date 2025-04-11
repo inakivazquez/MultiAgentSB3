@@ -113,6 +113,8 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
 
             # Penalty if the agent is too close to another agent
             if agents_with_close_neighbors[i]:
+                if self.verbose:
+                    print(f"Penalty agent {agent_id}")
                 rewards[agent_id] -= 10
             
             # Reward the agent for being close to the required distance to the asset

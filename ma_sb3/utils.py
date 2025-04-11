@@ -3,6 +3,7 @@ import tempfile
 import os
 import time
 from stable_baselines3 import SAC, TD3, DDPG, DQN
+from stable_baselines3.common.callbacks import CheckpointCallback
     
 
 def create_temp_model_filenames(models):
@@ -100,13 +101,15 @@ def ma_train(ma_env, model_algo_map, models_to_train='__all__', models_to_load=N
         if models_to_train == '__all__':
             models_to_train = list(models.keys())
 
+
         for i in range(training_iterations):
             print(f"Training iteration {i+1} of {training_iterations}...")
             for model_name, model in models.items():
                 if model_name in models_to_train:
                     algo_name = model.__class__.__name__
+                    checkpoint_callback = CheckpointCallback(save_freq=50_000, save_path=f"./checkpoints/{model_name}_{algo_name}_{tb_log_suffix}")
                     print(f"Training {model_name} with {algo_name}...")
-                    model.learn(total_timesteps=steps_per_iteration, progress_bar=True, reset_num_timesteps=reset_timesteps, tb_log_name=f"{model_name}_{algo_name}_{tb_log_suffix}")
+                    model.learn(total_timesteps=steps_per_iteration, callback=checkpoint_callback, progress_bar=True, reset_num_timesteps=reset_timesteps, tb_log_name=f"{model_name}_{algo_name}_{tb_log_suffix}")
                     
                 # Save the model (trained or not) to a temporary file
                 save_temp_model(model, model_name, trained_model_filenames)
