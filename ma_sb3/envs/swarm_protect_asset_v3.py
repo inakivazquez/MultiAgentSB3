@@ -113,7 +113,7 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
 
             # Penalty if the agent is too close to another agent
             if agents_with_close_neighbors[i]:
-                rewards[agent_id] -= 0.1
+                rewards[agent_id] -= 10
             
             # Reward the agent for being close to the required distance to the asset
             rewards[agent_id] += dist_score / 10

@@ -44,7 +44,7 @@ if __name__ == "__main__":
     span_angle_degrees = 360
     communication_items = args.communication_items
 
-    prefix = f"multi_V4_EXP2"
+    prefix = f"multi_V4_EXP2_pen10"
 
     experiment_name = f"{prefix}_c{communication_items}_{num_robots}a_{nrays}r_{span_angle_degrees}"
     seed = 42
@@ -55,7 +55,7 @@ if __name__ == "__main__":
     robot_algo_params = {'policy': "MlpPolicy",
                         'seed': seed,
                         'verbose': 1,
-                        #'learning_rate': 1e-5,
+                        #'learning_rate': 1e-4,
                         'tensorboard_log': "./logs"}
 
     robot_model_path = f"policies/{prefix}_model_c{communication_items}"
