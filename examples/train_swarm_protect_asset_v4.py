@@ -1,4 +1,4 @@
-from ma_sb3.envs.swarm_protect_asset_v3 import SwarmProtectAssetEnv
+from ma_sb3.envs.swarm_protect_asset_v4 import SwarmProtectAssetEnv
 from ma_sb3 import TimeLimitMAEnv
 from ma_sb3.utils import ma_train, ma_evaluate
 
@@ -44,7 +44,7 @@ if __name__ == "__main__":
     span_angle_degrees = 360
     communication_items = args.communication_items
 
-    prefix = f"multi_V4_EXP2_pen10"
+    prefix = f"multi_EXP4"
 
     experiment_name = f"{prefix}_c{communication_items}_{num_robots}a_{nrays}r_{span_angle_degrees}"
     seed = 42
