@@ -2,8 +2,6 @@ from ma_sb3.envs.soccer_v0 import SoccerEnv
 from ma_sb3 import TimeLimitMAEnv
 from ma_sb3.utils import ma_train, ma_evaluate
 
-from gymnasium.wrappers.time_limit import TimeLimit
-
 from stable_baselines3 import PPO, SAC, TD3, DDPG, DQN
 import pybullet as p
 import logging

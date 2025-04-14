@@ -2,8 +2,6 @@ from ma_sb3.envs.multipredator_prey_v1 import MultiPredatorPreyMAEnv
 from ma_sb3 import TimeLimitMAEnv
 from ma_sb3.utils import ma_train, ma_evaluate
 
-from gymnasium.wrappers.time_limit import TimeLimit
-
 from stable_baselines3 import PPO, SAC
 import pybullet as p
 import logging
