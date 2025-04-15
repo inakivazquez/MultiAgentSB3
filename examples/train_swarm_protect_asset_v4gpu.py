@@ -40,11 +40,11 @@ if __name__ == "__main__":
 
     num_robots = 60
     num_assets = 2
-    nrays = 8
+    nrays = 20
     span_angle_degrees = 360
     communication_items = args.communication_items
 
-    prefix = f"multi_EXP4_ray8"
+    prefix = f"multi_EXP4"
 
     experiment_name = f"{prefix}_c{communication_items}_{num_robots}a_{nrays}r_{span_angle_degrees}"
     seed = 42

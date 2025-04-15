@@ -5,6 +5,9 @@ import random
 import math
 import os
 
+AGENT_COLOR = np.array([0.9, 0.5, 0.1, 1.0])
+AGENT_COLISSION_COLOR = np.array([0.6, 0.0, 0.0, 1.0])
+
 class SwarmProtectAssetEnv(BaseSwarmEnv):
     def __init__(self, num_assets = 1, surrounding_required = 0.99, asset_move_force = 0, verbose=False,  *args, **kwargs):
         self.num_assets = num_assets # Important at this point as it is used to generate the XML in the parent class
@@ -116,7 +119,11 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
                 if self.verbose:
                     print(f"Penalty agent {agent_id}")
                 rewards[agent_id] -= 10
-            
+                # Change color if too close
+                self.model.geom_rgba[body_id] = AGENT_COLISSION_COLOR
+            else:
+                self.model.geom_rgba[body_id] = AGENT_COLOR
+
             # Reward the agent for being close to the required distance to the asset
             rewards[agent_id] += dist_score / 10
 
@@ -281,7 +288,7 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
             # In the case of joint slide, the position is relative to the parent body
             # So we need to set the position of the parent body to 0, 0, 0
             x, y = 0, 0
-            r, g, b = np.random.rand(3)  # Random color
+            r, g, b = AGENT_COLOR[0], AGENT_COLOR[1], AGENT_COLOR[2]  
 
             if shape == 'cube':
                 xml += f"""
