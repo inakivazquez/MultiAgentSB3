@@ -7,6 +7,7 @@ import os
 
 AGENT_COLOR = np.array([0.9, 0.5, 0.1, 1.0])
 AGENT_COLISSION_COLOR = np.array([0.6, 0.0, 0.0, 1.0])
+AGENT_PROTECTING_COLOR = np.array([0.0, 0.6, 0.0, 1.0])
 
 class SwarmProtectAssetEnv(BaseSwarmEnv):
     def __init__(self, num_assets = 1, surrounding_required = 0.99, asset_move_force = 0, verbose=False,  *args, **kwargs):
@@ -114,15 +115,15 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
             closest_dist = assets_close_to_agents_distances[i]
             dist_score = np.exp(-abs(closest_dist - asset_distance_required))
 
+            agent_collision = False
+            agent_protecting = False
+
             # Penalty if the agent is too close to another agent
             if agents_with_close_neighbors[i]:
                 if self.verbose:
                     print(f"Penalty agent {agent_id}")
                 rewards[agent_id] -= 10
-                # Change color if too close
-                self.model.geom_rgba[body_id] = AGENT_COLISSION_COLOR
-            else:
-                self.model.geom_rgba[body_id] = AGENT_COLOR
+                agent_collision = True
             
             # Reward the agent for being close to the required distance to the asset
             rewards[agent_id] += dist_score / 10
@@ -130,14 +131,23 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
             # If the agent has better distance score than required, bonus based on surrouding score
             if dist_score >= distance_score_required:
                 rewards[agent_id] += 0.5 * assets_surrounding_scores[closest_idx]
-
-            # If the agent is participating in the successful protection of the asset, bonus
-            if self.assets_protection_achieved[closest_idx]:
-                rewards[agent_id] += 0.5
+                # If being at distance (important) the agent is participating in the successful protection of the asset, bonus
+                if self.assets_protection_achieved[closest_idx]:
+                    rewards[agent_id] += 0.5
+                    agent_protecting = True
 
             # If all assets are protected, give a bonus
             if all_protected:
                 rewards[agent_id] += 1.0
+
+            # Update agent color
+            if agent_collision:
+                self.model.geom_rgba[body_id] = AGENT_COLISSION_COLOR
+            elif agent_protecting:
+                self.model.geom_rgba[body_id] = AGENT_PROTECTING_COLOR
+            else:
+                self.model.geom_rgba[body_id] = AGENT_COLOR
+
 
         if all_protected:
             if self.verbose:
