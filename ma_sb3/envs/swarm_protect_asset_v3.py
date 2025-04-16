@@ -164,16 +164,16 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         mujoco_robot_id = self.mujoco_robot_ids[agent_id]
         detected_body_ids, normalized_distances = self.perform_raycast(mujoco_robot_id)
         if observe_protection:
-            ray_obs = np.zeros((self.nrays, 4+self.communication_items), dtype=np.float32)
+            ray_obs = np.zeros((self.nrays, 4+self.individual_comm_items), dtype=np.float32)
         else:
-            ray_obs = np.zeros((self.nrays, 3+self.communication_items), dtype=np.float32)
+            ray_obs = np.zeros((self.nrays, 3+self.individual_comm_items), dtype=np.float32)
         for i, detected_body_id in enumerate(detected_body_ids):
             # If the detected body is a robot different from the agent's robot
             ray_obs[i][0] = normalized_distances[i]
             if detected_body_id in self.mujoco_robot_ids.values() and detected_body_id != mujoco_robot_id:
                 ray_obs[i][1] = 1 # Flag for robot detected
-                if self.communication_items > 0:
-                    ray_obs[i][4:4+self.communication_items] = self.agent_comm_messages[detected_body_id] # Communication message from the agent
+                if self.individual_comm_items > 0:
+                    ray_obs[i][4:4+self.individual_comm_items] = self.agent_comm_messages[detected_body_id] # Communication message from the agent
             if detected_body_id in self.asset_ids:
                 ray_obs[i][2] = 1 # Flag for asset detected
                 asset_idx = self.asset_ids.index(detected_body_id)

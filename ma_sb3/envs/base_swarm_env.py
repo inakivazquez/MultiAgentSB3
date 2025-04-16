@@ -29,7 +29,8 @@ class BaseSwarmEnv(MujocoEnv, BaseMAEnv):
         data = mujoco.MjData(model)
         return model, data
 
-    def __init__(self, num_robots=2, agent_speed=0.5, forward_only = True, nrays=5, span_angle_degrees=180, communication_items=0,
+    def __init__(self, num_robots=2, agent_speed=0.5, forward_only = True, nrays=5, span_angle_degrees=180,
+                 individual_comm_items=0, env_comm_items=0,
                  obs_body_prefixes = [],
                  **kwargs):
 
@@ -68,24 +69,26 @@ class BaseSwarmEnv(MujocoEnv, BaseMAEnv):
 
         self.nrays = nrays
         self.span_angle_degrees = span_angle_degrees
-        self.communication_items = communication_items
+        self.individual_comm_items = individual_comm_items
+        self.env_comm_items = env_comm_items
         self.forward_only = forward_only
         self.obs_body_prefixes = obs_body_prefixes
         obs_num_bodies = len(obs_body_prefixes)
         
         for i in range(num_robots):
             # Observation space
-            # Distance to body, then one-hot for each type of body and communication items
+            # Per every raycast: distance to body, then one-hot for each type of body and individual communication items
+            # Then general communication items
             observation_space = gym.spaces.Box(
-                low=np.array(([0] + [0]*obs_num_bodies + [-1] * self.communication_items) * self.nrays, dtype=np.float32),
-                high=np.array(([1] + [1]*obs_num_bodies + [1] * self.communication_items) * self.nrays, dtype=np.float32),
-                shape=((1 + obs_num_bodies + self.communication_items)*self.nrays,))
+                low=np.array(([0] + [0]*obs_num_bodies + [-1] * self.individual_comm_items) * self.nrays + [-1] * self.env_comm_items, dtype=np.float32),
+                high=np.array(([1] + [1]*obs_num_bodies + [1] * self.individual_comm_items) * self.nrays + [1] * self.env_comm_items, dtype=np.float32),
+                shape=((1 + obs_num_bodies + self.individual_comm_items)*self.nrays + self.env_comm_items,))
             # Action space
             low_limit = 0 if self.forward_only else -1
             action_space = gym.spaces.Box(
-                low=np.array([low_limit]*2 + [-1] * self.communication_items, dtype=np.float32),
-                high=np.array([+1]*(2+self.communication_items) , dtype=np.float32),
-                shape=(2+self.communication_items,))
+                low=np.array([low_limit]*2 + [-1] * self.individual_comm_items, dtype=np.float32),
+                high=np.array([+1]*(2+self.individual_comm_items) , dtype=np.float32),
+                shape=(2+self.individual_comm_items,))
             
             self.register_agent(agent_id=f"agrobot_{i}",
                             observation_space=observation_space,
@@ -123,7 +126,7 @@ class BaseSwarmEnv(MujocoEnv, BaseMAEnv):
         self.active_movements = {}  # Track movements per object
 
         # Initialize the agents public communication message
-        self.agent_comm_messages = {mujoco_robot_id: [0]*self.communication_items for mujoco_robot_id in self.mujoco_robot_ids.values()}
+        self.agent_comm_messages = {mujoco_robot_id: [0]*self.individual_comm_items for mujoco_robot_id in self.mujoco_robot_ids.values()}
 
     def do_simulation(self, ctrl, n_frames):
         value = super().do_simulation(ctrl, n_frames)
@@ -135,7 +138,7 @@ class BaseSwarmEnv(MujocoEnv, BaseMAEnv):
         self_mujoco_robot_id = self.mujoco_robot_ids[agent_id]
         detected_body_ids, normalized_distances = self.perform_raycast(self_mujoco_robot_id)
         obs_num_bodies = len(self.obs_body_prefixes)
-        ray_obs = np.zeros((self.nrays, obs_num_bodies + 1 + self.communication_items), dtype=np.float32)
+        ray_obs = np.zeros((self.nrays, obs_num_bodies + 1 + self.individual_comm_items), dtype=np.float32)
         for i, detected_body_id in enumerate(detected_body_ids):
             # If the detected body is a robot different from the agent's robot
             if detected_body_id != self_mujoco_robot_id:
@@ -144,8 +147,8 @@ class BaseSwarmEnv(MujocoEnv, BaseMAEnv):
                     if mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, detected_body_id).startswith(prefix):
                         ray_obs[i][j] = 1
                 ray_obs[i][obs_num_bodies] = normalized_distances[i]
-                if self.communication_items > 0:
-                    ray_obs[i][obs_num_bodies+1:obs_num_bodies+1+self.communication_items] = self.agent_comm_messages[detected_body_id] # Communication message from the agent
+                if self.individual_comm_items > 0:
+                    ray_obs[i][obs_num_bodies+1:obs_num_bodies+1+self.individual_comm_items] = self.agent_comm_messages[detected_body_id] # Communication message from the agent
             # For debugging
             if False and detected_body_id != -1 and detected_body_id != self_mujoco_robot_id:
                 body_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, detected_body_id)
@@ -196,12 +199,12 @@ class BaseSwarmEnv(MujocoEnv, BaseMAEnv):
             self.setup_raycast(mujoco_id, self.nrays, self.span_angle_degrees)
 
         # Initialize the agents public communication message
-        self.agent_comm_messages = {mujoco_robot_id: [0]*self.communication_items for mujoco_robot_id in self.mujoco_robot_ids.values()}
+        self.agent_comm_messages = {mujoco_robot_id: [0]*self.individual_comm_items for mujoco_robot_id in self.mujoco_robot_ids.values()}
 
     def step_agent(self, agent_id:int, action: ActType) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
         mujoco_robot_id = self.mujoco_robot_ids[agent_id]
         self.start_move(mujoco_robot_id, speed=action[0], rotation=action[1])
-        self.agent_comm_messages[mujoco_robot_id] = action[2:2+self.communication_items] # To be displayed and used by other agents
+        self.agent_comm_messages[mujoco_robot_id] = action[2:2+self.individual_comm_items] # To be displayed and used by other agents
 
     def setup_raycast(self, mujoco_robot_id, nrays, angle_covered_degrees):
         """Precomputes raycast structures (only called once)."""

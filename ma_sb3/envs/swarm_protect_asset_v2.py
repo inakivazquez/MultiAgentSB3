@@ -120,7 +120,7 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
     def get_observation(self, agent_id):
         mujoco_cube_id = self.mujoco_cube_ids[agent_id]
         detected_body_ids, normalized_distances = self.perform_raycast(mujoco_cube_id)
-        ray_obs = np.zeros((self.nrays, 3+self.communication_items), dtype=np.float32)
+        ray_obs = np.zeros((self.nrays, 3+self.individual_comm_items), dtype=np.float32)
         for i, detected_body_id in enumerate(detected_body_ids):
             if detected_body_id in self.asset_ids:
                 ray_obs[i][0] = 1
@@ -129,8 +129,8 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
             if detected_body_id in self.mujoco_cube_ids.values() and detected_body_id != mujoco_cube_id:
                 ray_obs[i][1] = 1 # Flag for cube detected
                 ray_obs[i][2] = normalized_distances[i]
-                if self.communication_items > 0:
-                    ray_obs[i][3:3+self.communication_items] = self.agent_comm_messages[detected_body_id] # Communication message from the agent
+                if self.individual_comm_items > 0:
+                    ray_obs[i][3:3+self.individual_comm_items] = self.agent_comm_messages[detected_body_id] # Communication message from the agent
             # For debugging
             if False and detected_body_id != -1 and detected_body_id != mujoco_cube_id:
                 body_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, detected_body_id)

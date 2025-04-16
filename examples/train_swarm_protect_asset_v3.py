@@ -67,7 +67,7 @@ if __name__ == "__main__":
                   'nrays': nrays,
                   'span_angle_degrees': span_angle_degrees,
                   'obs_body_prefixes': ['robot', 'asset', 'asset'], # We declare asset twice to cover the cases of asset surrouneded or not
-                  'communication_items': communication_items,
+                  'individual_comm_items': communication_items,
                   'surrounding_required': 0.90,
                   'asset_move_force': 0,
                   'verbose': False
