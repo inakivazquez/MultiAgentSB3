@@ -189,6 +189,12 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
 
         ray_obs = ray_obs.flatten()
         obs = ray_obs.copy()
+
+        # Add the protection rate to the observation as env communication item
+        protection_rate = np.mean(self.assets_protection_achieved)
+        obs = np.concatenate((obs, [protection_rate]), axis=0)
+        print(obs)
+        
         return obs
 
     def compute_closest_assets_to_agents(self, agent_positions, asset_positions):
