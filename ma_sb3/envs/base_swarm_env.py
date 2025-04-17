@@ -30,7 +30,7 @@ class BaseSwarmEnv(MujocoEnv, BaseMAEnv):
         return model, data
 
     def __init__(self, num_robots=2, agent_speed=0.5, forward_only = True, nrays=5, span_angle_degrees=180,
-                 individual_comm_items=0, env_comm_items=0,
+                 individual_comm_items=0, env_comm_items=0, comm_learning=True,
                  obs_body_prefixes = [],
                  **kwargs):
 
@@ -70,6 +70,7 @@ class BaseSwarmEnv(MujocoEnv, BaseMAEnv):
         self.nrays = nrays
         self.span_angle_degrees = span_angle_degrees
         self.individual_comm_items = individual_comm_items
+        self.comm_learning = comm_learning
         self.env_comm_items = env_comm_items
         self.forward_only = forward_only
         self.obs_body_prefixes = obs_body_prefixes
@@ -85,10 +86,15 @@ class BaseSwarmEnv(MujocoEnv, BaseMAEnv):
                 shape=((1 + obs_num_bodies + self.individual_comm_items)*self.nrays + self.env_comm_items,))
             # Action space
             low_limit = 0 if self.forward_only else -1
+            # Check if in comm is in the action space and should be learned
+            if self.comm_learning:
+                self.action_comm_items = self.individual_comm_items
+            else:
+                self.action_comm_items = 0
             action_space = gym.spaces.Box(
-                low=np.array([low_limit]*2 + [-1] * self.individual_comm_items, dtype=np.float32),
-                high=np.array([+1]*(2+self.individual_comm_items) , dtype=np.float32),
-                shape=(2+self.individual_comm_items,))
+                low=np.array([low_limit]*2 + [-1] * self.action_comm_items, dtype=np.float32),
+                high=np.array([+1]*(2+self.action_comm_items) , dtype=np.float32),
+                shape=(2+self.action_comm_items,))
             
             self.register_agent(agent_id=f"agrobot_{i}",
                             observation_space=observation_space,
@@ -204,7 +210,8 @@ class BaseSwarmEnv(MujocoEnv, BaseMAEnv):
     def step_agent(self, agent_id:int, action: ActType) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
         mujoco_robot_id = self.mujoco_robot_ids[agent_id]
         self.start_move(mujoco_robot_id, speed=action[0], rotation=action[1])
-        self.agent_comm_messages[mujoco_robot_id] = action[2:2+self.individual_comm_items] # To be displayed and used by other agents
+        if self.comm_learning:
+            self.agent_comm_messages[mujoco_robot_id] = action[2:2+self.action_comm_items] # To be displayed and used by other agents
 
     def setup_raycast(self, mujoco_robot_id, nrays, angle_covered_degrees):
         """Precomputes raycast structures (only called once)."""
