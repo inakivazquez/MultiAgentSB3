@@ -56,7 +56,7 @@ if __name__ == "__main__":
                         'seed': seed,
                         'verbose': 1,
                         'batch_size': 512,
-                        'policy_kwargs': {'net_arch': [256, 256, 128]},
+                        'policy_kwargs': {'net_arch': [256, 256, 128], 'use_sde':False},
                         'learning_rate': 3e-4,
                         'tensorboard_log': "./logs"}
 
