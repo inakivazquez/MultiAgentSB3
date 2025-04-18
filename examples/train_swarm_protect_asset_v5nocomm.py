@@ -39,12 +39,12 @@ if __name__ == "__main__":
         print("Loading previous model.")
 
     num_robots = 60
-    num_assets = 1
+    num_assets = 2
     nrays = 20
     span_angle_degrees = 360
     communication_items = args.communication_items
 
-    prefix = f"multi_EXP5_hyper"
+    prefix = f"multi_EXP5_hyper_nocactioncomm"
 
     experiment_name = f"{prefix}_c{communication_items}_{num_robots}a_{nrays}r_{span_angle_degrees}"
     seed = 42

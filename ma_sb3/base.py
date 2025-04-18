@@ -34,8 +34,9 @@ class AgentMAEnv(Env):
 
 class BaseMAEnv():
 
-    agents = {}
-    previous_observation = {}
+    def __init__(self):
+        self.agents = {}
+        self.previous_observation = {}
 
     def register_agent(self, agent_id, observation_space, action_space, model_name=None):
         # Create the agent environment
@@ -134,17 +135,17 @@ class BaseMAEnv():
 
         
 
-class TimeLimitMAEnv(BaseMAEnv):
-
-    max_episode_steps = None
-    current_step = 0
+class TimeLimitMAEnv:
     
-    def __init__(self, env, max_episode_steps=None) -> None:
+    def __init__(self, env:BaseMAEnv, max_episode_steps=None) -> None:
         self.env = env
         self.max_episode_steps = max_episode_steps
-        for agent_id, agent_data in self.agents.items():
-            agent_data[0].shared_env = self
+        self.current_step = 0
 
+    @property
+    def agents(self):
+        return self.env.agents
+        
     def step_all(self, agent_actions):
         obs, rewards, terminated, truncated, info = self.env.step_all(agent_actions)
         self.current_step += 1
@@ -161,20 +162,30 @@ class TimeLimitMAEnv(BaseMAEnv):
     def register_agent(self, agent_id, observation_space, action_space):
         return self.env.register_agent(agent_id, observation_space, action_space)
 
+    def get_agents_envs(self):
+        return self.env.get_agents_envs()
+
     def set_agent_models(self, models):
         return self.env.set_agent_models(models)
                 
-    def sync_wait_for_actions_completion(self):
-        return self.env.wait_for_actions_completion()
-
     def predict_other_agents_actions(self, agent_id):
         return self.env.predict_other_agents_actions(agent_id)
 
     def get_state(self):
         return self.env.get_full_state()
 
-    def evaluate_env_state(self):
-        return self.env.get_env_full_state()
-
     def close(self):
         return self.env.close()
+
+    def step_agent(self, agent_id, action):
+        return self.env.step_agent(agent_id, action)
+    
+    def get_observation(self, agent_id):
+        return self.env.get_observation(agent_id)
+
+    def sync_wait_for_actions_completion(self):
+        # Must be implemented, even if it is just a 'pass' if no synchronization is needed
+        raise NotImplementedError
+
+    def evaluate_env_state(self):
+        return self.env.evaluate_env_state()

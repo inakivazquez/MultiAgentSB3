@@ -67,6 +67,8 @@ class BaseSwarmEnv(MujocoEnv, BaseMAEnv):
             "render_fps": int(np.round(1.0 / self.dt)),
         }
 
+        BaseMAEnv.__init__(self)
+
         self.nrays = nrays
         self.span_angle_degrees = span_angle_degrees
         self.individual_comm_items = individual_comm_items
