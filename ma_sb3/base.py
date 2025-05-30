@@ -141,6 +141,9 @@ class TimeLimitMAEnv:
         self.env = env
         self.max_episode_steps = max_episode_steps
         self.current_step = 0
+        # Necessary to overwrite the shared environment with the time limits
+        for agent_id, agent_data in self.agents.items():
+            agent_data[0].shared_env = self
 
     @property
     def agents(self):
