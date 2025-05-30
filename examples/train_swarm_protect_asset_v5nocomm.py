@@ -44,7 +44,7 @@ if __name__ == "__main__":
     span_angle_degrees = 360
     communication_items = args.communication_items
 
-    prefix = f"multi_EXP5_hyper_nocactioncomm"
+    prefix = f"multi_EXP5_hyper_nocactioncomm_bugsolved"
 
     experiment_name = f"{prefix}_c{communication_items}_{num_robots}a_{nrays}r_{span_angle_degrees}"
     seed = 42

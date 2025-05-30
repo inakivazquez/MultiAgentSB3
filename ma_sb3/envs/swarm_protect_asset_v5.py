@@ -128,6 +128,9 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
             # Reward the agent for being close to the required distance to the asset
             rewards[agent_id] += dist_score / 10
 
+            # By default the agent is not protecting the asset
+            self.agent_comm_messages[body_id] = [0]*self.individual_comm_items 
+
             # If the agent has better distance score than required, bonus based on surrouding score
             if dist_score >= distance_score_required:
                 rewards[agent_id] += 0.5 * assets_surrounding_scores[closest_idx]
@@ -137,8 +140,6 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
                     agent_protecting = True
                     # And modify the communication state of the agent
                     self.agent_comm_messages[body_id] = [1]*self.individual_comm_items 
-                else:
-                    self.agent_comm_messages[body_id] = [0]*self.individual_comm_items 
 
 
             # If all assets are protected, give a bonus
