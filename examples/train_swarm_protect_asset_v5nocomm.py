@@ -44,7 +44,7 @@ if __name__ == "__main__":
     span_angle_degrees = 360
     communication_items = args.communication_items
 
-    prefix = f"multi_EXP5_hyper_nocactioncomm_bugsolved"
+    prefix = f"multi_EXP5_hyper_nocactioncomm_seeasset2"
 
     experiment_name = f"{prefix}_c{communication_items}_{num_robots}a_{nrays}r_{span_angle_degrees}"
     seed = 42
@@ -56,7 +56,7 @@ if __name__ == "__main__":
                         'seed': seed,
                         'verbose': 1,
                         'batch_size': 512,
-                        'policy_kwargs': {'net_arch': [256, 256, 128]},
+                        'policy_kwargs': {'net_arch': [256, 256, 128], 'use_sde':False},
                         'learning_rate': 3e-4,
                         'tensorboard_log': "./logs"}
 
