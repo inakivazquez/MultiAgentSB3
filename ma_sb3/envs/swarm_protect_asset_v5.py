@@ -133,30 +133,29 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
             # Reward the agent for being close to the required distance to the asset
             # only if asset is not protected
             #if not self.assets_protection_achieved[closest_idx]:
-            rewards[agent_id] += dist_score / 10
+            #rewards[agent_id] += dist_score / 10
 
             # By default the agent is not protecting the asset
             self.agent_comm_messages[body_id] = [0]*self.individual_comm_items 
 
-            # If the agent has better distance score than required
-            # And the agent sees the asset
-            if dist_score >= distance_score_required and agent_sees_asset:
-                # Bonus based on surrouding score
-                rewards[agent_id] += 0.5 * assets_surrounding_scores[closest_idx]
-                # If being at distance (important) the agent is participating in the successful protection of the asset, bonus
-                if self.assets_protection_achieved[closest_idx]:
-                    rewards[agent_id] += 0.5
-                    agent_protecting = True
-                    # And modify the communication state of the agent
-                    self.agent_comm_messages[body_id] = [1]*self.individual_comm_items 
+            if agent_sees_asset:
+                rewards[agent_id] += 0.1  # Small bonus for seeing the asset
 
-            # Si el objeto ya está protegido y el agente NO está ayudando realmente, penaliza
-            #if self.assets_protection_achieved[closest_idx] and not agent_protecting:
-                #rewards[agent_id] -= dist_score / 10
+                # If the agent has better distance score than required
+                # And the agent sees the asset
+                if dist_score >= distance_score_required:
+                    # Bonus based on surrouding score
+                    rewards[agent_id] += 0.5 * assets_surrounding_scores[closest_idx]
+                    # If being at distance (important) the agent is participating in the successful protection of the asset, bonus
+                    if self.assets_protection_achieved[closest_idx]:
+                        rewards[agent_id] += 0.5
+                        agent_protecting = True
+                        # And modify the communication state of the agent
+                        self.agent_comm_messages[body_id] = [1]*self.individual_comm_items 
 
-            # If all assets are protected, give a bonus
-            if all_protected:
-                rewards[agent_id] += 1.0
+                        # If all assets are protected, give a bonus
+                        if all_protected:
+                            rewards[agent_id] += 1.0
 
             # Update agent color
             if agent_collision:
