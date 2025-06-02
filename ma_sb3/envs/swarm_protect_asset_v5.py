@@ -106,14 +106,17 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
 
         all_protected = all(self.assets_protection_achieved)
 
+        non_protected_asset_positions = asset_positions[~np.array(self.assets_protection_achieved)]
+        non_protected_assets = np.where(~np.array(self.assets_protection_achieved))[0]
+
         # Step 3: Compute agent rewards
         for i, agent_id in enumerate(agent_ids):
             body_id = self.mujoco_robot_ids[agent_id]
 
             move = self.active_movements.get(body_id)
-            if move:
+            """if move:
                 rewards[agent_id] -= move['distance_done']
-                rewards[agent_id] -= move['rotation_done'] / 10
+                rewards[agent_id] -= move['rotation_done'] / 10"""
 
             closest_idx = assets_close_to_agents_indices[i]
             closest_dist = assets_close_to_agents_distances[i]
@@ -135,11 +138,15 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
             #if not self.assets_protection_achieved[closest_idx]:
             #rewards[agent_id] += dist_score / 10
 
+            # Reward for getting close to a non-protected asset
+            if closest_idx in non_protected_assets:
+                rewards[agent_id] += dist_score / 10
+
             # By default the agent is not protecting the asset
             self.agent_comm_messages[body_id] = [0]*self.individual_comm_items 
 
             if agent_sees_asset:
-                rewards[agent_id] += 0.1  # Small bonus for seeing the asset
+                rewards[agent_id] += 0.2  # Small bonus for seeing the asset
 
                 # If the agent has better distance score than required
                 # And the agent sees the asset
@@ -156,6 +163,10 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
                         # If all assets are protected, give a bonus
                         if all_protected:
                             rewards[agent_id] += 1.0
+
+            if not agent_protecting and self.assets_protection_achieved[closest_idx]:
+                # If the agent is not protecting but the asset is protected, penalty
+                rewards[agent_id] -= 0.1
 
             # Update agent color
             if agent_collision:
