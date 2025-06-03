@@ -1,6 +1,6 @@
 from ma_sb3.envs.swarm_protect_asset_v5 import SwarmProtectAssetEnv
 from ma_sb3 import TimeLimitMAEnv
-from ma_sb3.utils import ma_train, ma_evaluate
+from ma_sb3.utils import ma_train, ma_evaluate, ma_train_vec
 
 from stable_baselines3 import PPO, SAC, TD3, DDPG, DQN
 import logging
@@ -8,9 +8,6 @@ from stable_baselines3.common.env_util import make_vec_env
 import argparse
 
 import json
-import random
-from ma_sb3.base import MultiAgentSharedVecEnv
-from stable_baselines3.common.vec_env import VecMonitor
 
 def save_parameters(hyperparams, env_params, file):
     """
@@ -42,13 +39,13 @@ if __name__ == "__main__":
         print("Loading previous model.")
 
     num_robots = 60
-    num_learning_robots = 20
+    num_learning_robots = 10
     num_assets = 2
     nrays = 20
     span_angle_degrees = 360
     communication_items = args.communication_items
 
-    prefix = f"multi_EXPvec_20l"
+    prefix = f"multi_EXPvec_10l"
 
     experiment_name = f"{prefix}_c{communication_items}_{num_robots}a_{nrays}r_{span_angle_degrees}"
     seed = 42
@@ -87,15 +84,6 @@ if __name__ == "__main__":
         ma_env = SwarmProtectAssetEnv(**env_params, render_mode=None)
         ma_env = TimeLimitMAEnv(ma_env, max_episode_steps=500)
 
-        all_agents = list(ma_env.agents.keys())
-
-        # You want to train only some of them
-        learning_agents = random.sample(all_agents, num_learning_robots)
-
-        # Wrap in VecEnv only the learning agents
-        vec_env = MultiAgentSharedVecEnv(ma_env, learning_agents)
-        vec_env = VecMonitor(vec_env)
-
         model_algo_map = {'robot': (robot_algo, robot_algo_params)}
 
         models_to_load = {}
@@ -104,12 +92,13 @@ if __name__ == "__main__":
 
         models_to_train = '__all__'
 
-        trained_models = ma_train(vec_env, model_algo_map=model_algo_map,
+        trained_models = ma_train_vec(ma_env, model_algo_map=model_algo_map,
                  models_to_train=models_to_train, models_to_load=models_to_load,
+                 num_learning_agents=num_learning_robots,
                  total_timesteps_per_model=num_time_steps, training_iterations=1,
                  tb_log_suffix=f"{experiment_name}")
 
-        vec_env.close()
+        ma_env.close()
 
         trained_models['robot'].save(robot_model_path)
         if robot_algo in [SAC, TD3, DDPG, DQN]:

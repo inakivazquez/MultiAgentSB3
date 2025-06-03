@@ -4,6 +4,9 @@ import os
 import time
 from stable_baselines3 import SAC, TD3, DDPG, DQN
 from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.vec_env import VecMonitor
+from ma_sb3.base import MultiAgentSharedVecEnv
+import random
     
 
 def create_temp_model_filenames(models):
@@ -52,6 +55,25 @@ def delete_temp_model_files(temp_model_files):
     for temp_file in temp_model_files.values():
         if os.path.exists(temp_file):
             os.remove(temp_file)
+
+def ma_train_vec(ma_env, model_algo_map, models_to_train='__all__', models_to_load=None,
+            num_learning_agents = 1, 
+            total_timesteps_per_model=10_000, training_iterations=2, tb_log_suffix=""):        
+
+        all_agents = list(ma_env.agents.keys())
+
+        # Randomly select some of them for training
+        learning_agents = random.sample(all_agents, num_learning_agents)
+
+        # Wrap in VecEnv only the learning agents
+        vec_env = MultiAgentSharedVecEnv(ma_env, learning_agents)
+        vec_env = VecMonitor(vec_env)
+
+        # Train the agents
+        return ma_train(ma_env=vec_env, model_algo_map=model_algo_map, models_to_train=models_to_train,
+             models_to_load=models_to_load, total_timesteps_per_model=total_timesteps_per_model,
+             training_iterations=training_iterations, tb_log_suffix=tb_log_suffix)
+
 
 def ma_train(ma_env, model_algo_map, models_to_train='__all__', models_to_load=None,
              total_timesteps_per_model=10_000, training_iterations=2, tb_log_suffix=""):        
@@ -144,7 +166,7 @@ def ma_evaluate(ma_env, models, total_episodes=100, verbose=False):
             - average_reward_per_model: A dictionary mapping model names to their average rewards across all episodes.
     """
     list_episodes_rewards = {agent_id: [] for agent_id in ma_env.agents.keys()}
-    agentid_modelname_map = {agent_id: env_model_map[1] for agent_id, env_model_map in ma_env.agents.items()}
+    agentid_modelname_map = {agent_id: agent_info.model_name for agent_id, agent_info in ma_env.agents.items()}
 
     for _ in range(total_episodes):
         obs, info = ma_env.reset()
