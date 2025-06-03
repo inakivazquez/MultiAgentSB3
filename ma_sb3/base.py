@@ -116,14 +116,6 @@ class TimeLimitMAEnv:
     def __getattr__(self, name):
         # Delegate attribute and method access to self.env
         return getattr(self.env, name)
-    
-    """@property
-    def agents(self):
-        return self.env.agents
-        
-    @property
-    def previous_observation(self):
-        return self.env.previous_observation"""
         
     def step_all(self, agent_actions):
         obs, rewards, terminated, truncated, info = self.env.step_all(agent_actions)
@@ -137,31 +129,6 @@ class TimeLimitMAEnv:
     def reset(self, seed=None):
         self.current_step = 0
         return self.env.reset(seed)
-
-    """def register_agent(self, agent_id, model_name, observation_space, action_space):
-        return self.env.register_agent(agent_id, model_name, observation_space, action_space)
-
-    def set_agent_models(self, models):
-        return self.env.set_agent_models(models)
-
-    def get_state(self):
-        return self.env.get_state()
-
-    def close(self):
-        return self.env.close()
-
-    def step_agent(self, agent_id, action):
-        return self.env.step_agent(agent_id, action)
-    
-    def get_observation(self, agent_id):
-        return self.env.get_observation(agent_id)
-
-    def sync_wait_for_actions_completion(self):
-        return self.env.sync_wait_for_actions_completion()
-
-    def evaluate_env_state(self):
-        return self.env.evaluate_env_state()"""
-
 
 
 class MultiAgentSharedVecEnv(VecEnv):
@@ -186,9 +153,6 @@ class MultiAgentSharedVecEnv(VecEnv):
     @property
     def agents(self):
         return self.shared_env.agents
-        
-    """def get_agents_envs(self):
-        return self.shared_env.get_agents_envs()"""
 
     def set_agent_models(self, models):
         return self.shared_env.set_agent_models(models)
@@ -242,8 +206,6 @@ class MultiAgentSharedVecEnv(VecEnv):
             np.array(dones_arr, dtype=np.bool_),
             infos_arr,
         )
-
-
 
     def close(self):
         self.shared_env.close()

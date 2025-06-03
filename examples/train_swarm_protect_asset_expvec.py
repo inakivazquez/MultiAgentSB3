@@ -92,7 +92,6 @@ if __name__ == "__main__":
         # You want to train only some of them
         learning_agents = random.sample(all_agents, num_learning_robots)
 
-        # Ensure all agents have models:
         # Wrap in VecEnv only the learning agents
         vec_env = MultiAgentSharedVecEnv(ma_env, learning_agents)
         vec_env = VecMonitor(vec_env)
@@ -119,7 +118,7 @@ if __name__ == "__main__":
 
     if train  == True:
         quit()
-        
+
     # TESTING SECTION
     render_mode = 'human'
     ma_env = SwarmProtectAssetEnv(**env_params, render_mode=render_mode)
