@@ -81,7 +81,6 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
         assets_close_to_agents_indices, assets_close_to_agents_distances = self.compute_closest_assets_to_agents(agent_positions, asset_positions)
 
         # Step 2: Evaluate asset protection conditions
-
         self.assets_protection_achieved = []
         assets_surrounding_scores = []
 
@@ -106,8 +105,11 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
 
         all_protected = all(self.assets_protection_achieved)
 
-        non_protected_asset_positions = asset_positions[~np.array(self.assets_protection_achieved)]
-        non_protected_assets = np.where(~np.array(self.assets_protection_achieved))[0]
+        # Compute non protected assets if required
+        if not all_protected:
+            non_protected_asset_positions = asset_positions[~np.array(self.assets_protection_achieved)]
+            non_protected_assets = np.where(~np.array(self.assets_protection_achieved))[0]        
+            non_protected_assets_close_to_agents_indices, non_protected_assets_close_to_agents_distances = self.compute_closest_assets_to_agents(agent_positions, non_protected_asset_positions)
 
         # Step 3: Compute agent rewards
         for i, agent_id in enumerate(agent_ids):
@@ -138,10 +140,6 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
             #if not self.assets_protection_achieved[closest_idx]:
             #rewards[agent_id] += dist_score / 10
 
-            # Reward for getting close to a non-protected asset
-            if closest_idx in non_protected_assets:
-                rewards[agent_id] += dist_score / 10
-
             # By default the agent is not protecting the asset
             self.agent_comm_messages[body_id] = [0]*self.individual_comm_items 
 
@@ -164,9 +162,11 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
                         if all_protected:
                             rewards[agent_id] += 1.0
 
-            if not agent_protecting and self.assets_protection_achieved[closest_idx]:
-                # If the agent is not protecting but the asset is protected, penalty
-                rewards[agent_id] -= 0.1
+            # If the agent is not protecting any asset, reward for getiing closer to the closest non-protected asset
+            if not all_protected and not agent_protecting:
+                non_protected_closest_dist = non_protected_assets_close_to_agents_distances[i]
+                non_protected_dist_score = np.exp(-abs(non_protected_closest_dist - asset_distance_required))
+                rewards[agent_id] += non_protected_dist_score / 10
 
             # Update agent color
             if agent_collision:
