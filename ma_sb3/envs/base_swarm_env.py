@@ -10,7 +10,7 @@ import random
 import os
 import math
 
-from ma_sb3 import AgentMAEnv, BaseMAEnv
+from ma_sb3 import AgentInfo, BaseMAEnv
 
 class BaseSwarmEnv(MujocoEnv, BaseMAEnv):
 

@@ -10,7 +10,7 @@ import pybullet as p
 import pybullet_data
 from gymnasium.spaces import Box
 
-from ma_sb3 import AgentMAEnv, BaseMAEnv
+from ma_sb3 import AgentInfo, BaseMAEnv
 from ma_sb3.envs.soccer_stadium import create_stadium, create_player, create_ball
 
 logger = logging.getLogger(__name__)

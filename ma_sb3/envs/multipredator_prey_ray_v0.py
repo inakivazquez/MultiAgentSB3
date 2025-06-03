@@ -1,5 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
-from ma_sb3 import AgentMAEnv, BaseMAEnv
+from ma_sb3 import AgentInfo, BaseMAEnv
 
 from gymnasium.spaces import Box
 import numpy as np

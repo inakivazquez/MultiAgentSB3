@@ -1,35 +1,24 @@
+from stable_baselines3.common.vec_env import VecEnv
 from concurrent.futures import ThreadPoolExecutor
-from gymnasium import Env
-import random
 import numpy as np
-class AgentMAEnv(Env):
-        def __init__(self, shared_env, agent_id, observation_space, action_space) -> None:
-            super().__init__()
-            self.shared_env = shared_env
-            self.agent_id = agent_id
-    
-            self.observation_space = observation_space
-            self.action_space = action_space
-    
-        def step(self, actions):
-            all_actions = self.shared_env.predict_other_agents_actions(self.agent_id)
-            all_actions[self.agent_id] = actions 
-            all_observations, rewards, terminated, truncated, info = self.shared_env.step_all(all_actions)
-            observations = all_observations[self.agent_id]
-            reward = rewards[self.agent_id]
+import random
 
-            return observations, reward, terminated, truncated, info
-    
-        def reset(self, seed=None):
-            obs, info = self.shared_env.reset(seed)
-            return obs[self.agent_id], info
+class AgentInfo():
+    def __init__(self, agent_id, model_name, observation_space, action_space) -> None:
+        super().__init__()
+        self.agent_id = agent_id
+        self.model_name = model_name
+        self.model = None
 
-        def set_model(self, model):
-            self.model = model
+        self.observation_space = observation_space
+        self.action_space = action_space
 
-        def predict(self, obs, deterministic=True):
-            action = self.model.predict(obs, deterministic=deterministic)
-            return action
+    def set_model(self, model):
+        self.model = model
+
+    def predict(self, obs, deterministic=True):
+        action = self.model.predict(obs, deterministic=deterministic)
+        return action
 
 
 class BaseMAEnv():
@@ -39,18 +28,12 @@ class BaseMAEnv():
         self.previous_observation = {}
 
     def register_agent(self, agent_id, observation_space, action_space, model_name=None):
-        # Create the agent environment
-        agent_env = AgentMAEnv(self, agent_id, observation_space, action_space)
-        # Add the agent environment and model name to the dictionary
         if model_name is None:
             model_name = agent_id
-        self.agents[agent_id] = (agent_env, model_name)
-
-
-    def get_agents_envs(self):
-        # Return a dictionary of the different agents' envs
-        envs = {key: value[0] for key, value in self.agents.items()}
-        return envs
+        # Create the agent
+        agent_info = AgentInfo(agent_id, model_name, observation_space, action_space)
+        # Add the agent and model name to the dictionary
+        self.agents[agent_id] = agent_info
 
     def set_agent_models(self, models):
         """
@@ -59,13 +42,12 @@ class BaseMAEnv():
         Parameters:
         - models (dict): A dictionary where keys are the model identifiers and values are the models to be set.
         """
-        for agent_id, agent_data in self.agents.items():
-            model_name = agent_data[1]
+        for agent_id, agent_info in self.agents.items():
+            model_name = agent_info.model_name
             if model_name in models:
-                agent_data[0].set_model(models[model_name])
+                agent_info.set_model(models[model_name])
             else:
                 raise ValueError(f"Model for agent_id '{agent_id}' is not provided in the models dictionary.")
-
 
     def step_all(self, agent_actions):
         # Execute steps concurrently
@@ -79,17 +61,6 @@ class BaseMAEnv():
         obs, rewards, terminated, truncated, info = self.get_state()
 
         return obs, rewards, terminated, truncated, info
-                
-    def predict_other_agents_actions(self, agent_id):
-        if agent_id not in self.agents:
-            raise ValueError("Invalid agent_id")
-        other_agents_predictions = {}
-        for other_agent_id in self.agents:
-            if other_agent_id != agent_id:
-                # Predict the action of the other agent using its environment's predict method
-                other_agent = self.agents[other_agent_id][0]
-                other_agents_predictions[other_agent_id] = other_agent.predict(self.previous_observation[other_agent_id])[0]
-        return other_agents_predictions
 
     def get_state(self):
         # Evaluate the state of the environment, part of this informaton may be used to get observations
@@ -141,13 +112,18 @@ class TimeLimitMAEnv:
         self.env = env
         self.max_episode_steps = max_episode_steps
         self.current_step = 0
-        # Necessary to overwrite the shared environment with the time limits
-        for agent_id, agent_data in self.agents.items():
-            agent_data[0].shared_env = self
 
-    @property
+    def __getattr__(self, name):
+        # Delegate attribute and method access to self.env
+        return getattr(self.env, name)
+    
+    """@property
     def agents(self):
         return self.env.agents
+        
+    @property
+    def previous_observation(self):
+        return self.env.previous_observation"""
         
     def step_all(self, agent_actions):
         obs, rewards, terminated, truncated, info = self.env.step_all(agent_actions)
@@ -162,20 +138,14 @@ class TimeLimitMAEnv:
         self.current_step = 0
         return self.env.reset(seed)
 
-    def register_agent(self, agent_id, observation_space, action_space):
-        return self.env.register_agent(agent_id, observation_space, action_space)
-
-    def get_agents_envs(self):
-        return self.env.get_agents_envs()
+    """def register_agent(self, agent_id, model_name, observation_space, action_space):
+        return self.env.register_agent(agent_id, model_name, observation_space, action_space)
 
     def set_agent_models(self, models):
         return self.env.set_agent_models(models)
-                
-    def predict_other_agents_actions(self, agent_id):
-        return self.env.predict_other_agents_actions(agent_id)
 
     def get_state(self):
-        return self.env.get_full_state()
+        return self.env.get_state()
 
     def close(self):
         return self.env.close()
@@ -187,8 +157,109 @@ class TimeLimitMAEnv:
         return self.env.get_observation(agent_id)
 
     def sync_wait_for_actions_completion(self):
-        # Must be implemented, even if it is just a 'pass' if no synchronization is needed
-        raise NotImplementedError
+        return self.env.sync_wait_for_actions_completion()
 
     def evaluate_env_state(self):
-        return self.env.evaluate_env_state()
+        return self.env.evaluate_env_state()"""
+
+
+
+class MultiAgentSharedVecEnv(VecEnv):
+    def __init__(self, shared_env, learning_agent_ids):
+        self.shared_env = shared_env
+        self.learning_agent_ids = learning_agent_ids
+        self.num_learning_agents = len(learning_agent_ids)
+
+        # Assume homogeneous spaces, take the first agent's spaces
+        sample_agent = shared_env.agents[learning_agent_ids[0]]
+        observation_space = sample_agent.observation_space
+        action_space = sample_agent.action_space
+
+        super().__init__(
+            num_envs=self.num_learning_agents,
+            observation_space=observation_space,
+            action_space=action_space
+        )
+
+        self.actions = None
+
+    @property
+    def agents(self):
+        return self.shared_env.agents
+        
+    """def get_agents_envs(self):
+        return self.shared_env.get_agents_envs()"""
+
+    def set_agent_models(self, models):
+        return self.shared_env.set_agent_models(models)
+
+    def reset(self, seed=None, options=None):
+        obs, info = self.shared_env.reset(seed=seed)
+        obs_arr = [obs[agent_id] for agent_id in self.learning_agent_ids]
+        return np.array(obs_arr)
+
+    def step_async(self, actions):
+        self.actions = actions
+
+    def step_wait(self):
+        agent_actions = {}
+
+        # Collect actions for learning agents (from algorithm)
+        for agent_id, action in zip(self.learning_agent_ids, self.actions):
+            agent_actions[agent_id] = action
+
+        # Predict actions for the other agents
+        for agent_id, agent_info in self.shared_env.agents.items():
+            if agent_id not in self.learning_agent_ids:
+                obs = self.shared_env.previous_observation[agent_id]
+                agent_actions[agent_id] = agent_info.predict(obs)[0]
+
+        # Step all agents together
+        obs, rewards, terminated, truncated, infos = self.shared_env.step_all(agent_actions)
+        episode_done = terminated or truncated
+
+        obs_arr, rewards_arr, dones_arr, infos_arr = [], [], [], []
+
+        # First store the current observations (before reset)
+        for agent_id in self.learning_agent_ids:
+            obs_arr.append(obs[agent_id])
+            rewards_arr.append(rewards[agent_id])
+            dones_arr.append(episode_done)
+
+            info = {}
+            if episode_done:
+                info["terminal_observation"] = obs[agent_id]
+            infos_arr.append(info)
+
+        # After terminal observation is recorded, reset and update obs
+        if episode_done:
+            new_obs, _ = self.shared_env.reset()
+            obs_arr = [new_obs[agent_id] for agent_id in self.learning_agent_ids]
+
+        return (
+            np.array(obs_arr),
+            np.array(rewards_arr, dtype=np.float32),
+            np.array(dones_arr, dtype=np.bool_),
+            infos_arr,
+        )
+
+
+
+    def close(self):
+        self.shared_env.close()
+
+    def get_attr(self, attr_name, indices=None):
+        if attr_name == "render_mode":
+            return [None] * self.num_envs
+        raise NotImplementedError(f"get_attr('{attr_name}') is not supported.")
+
+    def set_attr(self, attr_name, value, indices=None):
+        raise NotImplementedError("set_attr is not supported for this wrapper.")
+
+    def env_method(self, method_name, *method_args, indices=None, **method_kwargs):
+        raise NotImplementedError("env_method is not supported for this wrapper.")
+
+    def env_is_wrapped(self, wrapper_class, indices=None):
+        return [False] * self.num_envs
+    
+

@@ -1,4 +1,4 @@
-from ma_sb3 import BaseMAEnv, AgentMAEnv
+from ma_sb3 import BaseMAEnv, AgentInfo
 import tempfile
 import os
 import time
@@ -69,7 +69,7 @@ def ma_train(ma_env, model_algo_map, models_to_train='__all__', models_to_load=N
             dict: A dictionary mapping agent names to trained models.
         """
 
-        agent_env_map = {model_name: env for env, model_name in ma_env.agents.values()}
+        agent_env_map = {agent_info.model_name: ma_env for agent_info in ma_env.agents.values()}
 
         # Create agent models, either from scratch or load pre-trained models
         models = {}

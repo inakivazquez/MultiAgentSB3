@@ -1,1 +1,1 @@
-from ma_sb3.base import AgentMAEnv, BaseMAEnv, TimeLimitMAEnv
+from ma_sb3.base import AgentInfo, BaseMAEnv, TimeLimitMAEnv

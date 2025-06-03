@@ -9,7 +9,7 @@ import numpy as np
 import random
 import os
 
-from ma_sb3 import AgentMAEnv, BaseMAEnv
+from ma_sb3 import AgentInfo, BaseMAEnv
 
 # Generate XML for MuJoCo
 def generate_mujoco_xml(num_cubes:int=1):
