@@ -39,13 +39,13 @@ if __name__ == "__main__":
         print("Loading previous model.")
 
     num_robots = 60
-    num_learning_robots = 10
+    num_learning_robots = 5
     num_assets = 2
     nrays = 20
     span_angle_degrees = 360
     communication_items = args.communication_items
 
-    prefix = f"multi_EXPvec_10l"
+    prefix = f"multi_EXPvec_3see_{num_learning_robots}l"
 
     experiment_name = f"{prefix}_c{communication_items}_{num_robots}a_{nrays}r_{span_angle_degrees}"
     seed = 42

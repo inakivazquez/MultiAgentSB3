@@ -3,12 +3,27 @@ import tempfile
 import os
 import time
 from stable_baselines3 import SAC, TD3, DDPG, DQN
-from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback, CallbackList
 from stable_baselines3.common.vec_env import VecMonitor
 from ma_sb3.base import MultiAgentSharedVecEnv
 import random
     
+class TimeLimitCallback(BaseCallback):
+    def __init__(self, max_duration_seconds: int, verbose=0):
+        super().__init__(verbose)
+        self.max_duration_seconds = max_duration_seconds
+        self.start_time = None
 
+    def _on_training_start(self) -> None:
+        self.start_time = time.time()
+
+    def _on_step(self) -> bool:
+        if time.time() - self.start_time > self.max_duration_seconds:
+            if self.verbose:
+                print(f"⏱️ Fin del entrenamiento tras {self.max_duration_seconds} segundos.")
+            return False
+        return True
+    
 def create_temp_model_filenames(models):
     temp_model_files = {}
     for model_name, model in models.items():
@@ -130,8 +145,11 @@ def ma_train(ma_env, model_algo_map, models_to_train='__all__', models_to_load=N
                 if model_name in models_to_train:
                     algo_name = model.__class__.__name__
                     checkpoint_callback = CheckpointCallback(save_freq=50_000, save_path=f"./checkpoints/{model_name}_{algo_name}_{tb_log_suffix}")
+                    time_limit_callback = TimeLimitCallback(max_duration_seconds=60*120)  # 2 hour limit
+                    #callback = CallbackList([time_limit_callback, checkpoint_callback])
+                    callback = CallbackList([checkpoint_callback])
                     print(f"Training {model_name} with {algo_name}...")
-                    model.learn(total_timesteps=steps_per_iteration, callback=checkpoint_callback, progress_bar=True, reset_num_timesteps=reset_timesteps, tb_log_name=f"{model_name}_{algo_name}_{tb_log_suffix}")
+                    model.learn(total_timesteps=steps_per_iteration, callback=callback, progress_bar=True, reset_num_timesteps=reset_timesteps, tb_log_name=f"{model_name}_{algo_name}_{tb_log_suffix}")
                     
                 # Save the model (trained or not) to a temporary file
                 save_temp_model(model, model_name, trained_model_filenames)

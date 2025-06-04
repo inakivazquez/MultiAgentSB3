@@ -145,6 +145,8 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
 
             if agent_sees_asset:
                 rewards[agent_id] += 0.2  # Small bonus for seeing the asset
+                # And modify the communication state of the agent
+                self.agent_comm_messages[body_id] = [1]*self.individual_comm_items 
 
                 # If the agent has better distance score than required
                 # And the agent sees the asset
@@ -156,7 +158,7 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
                         rewards[agent_id] += 0.5
                         agent_protecting = True
                         # And modify the communication state of the agent
-                        self.agent_comm_messages[body_id] = [1]*self.individual_comm_items 
+                        self.agent_comm_messages[body_id] = [-1]*self.individual_comm_items 
 
                         # If all assets are protected, give a bonus
                         if all_protected:
@@ -166,7 +168,7 @@ class SwarmProtectAssetEnv(BaseSwarmEnv):
             if not all_protected and not agent_protecting:
                 non_protected_closest_dist = non_protected_assets_close_to_agents_distances[i]
                 non_protected_dist_score = np.exp(-abs(non_protected_closest_dist - asset_distance_required))
-                rewards[agent_id] += non_protected_dist_score / 10
+                rewards[agent_id] += non_protected_dist_score / 5
 
             # Update agent color
             if agent_collision:
